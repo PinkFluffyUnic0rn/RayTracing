@@ -24,7 +24,7 @@ __kernel void raytrace( __constant rt_cl_raytrace_args *a,
 	int y = get_global_id(1) * (a->ydelta);
 	int x = get_global_id(0) * (a->xdelta);
 	int i, j;
-
+	
 	pRpData.boundingBox = a->boundingBox;
 	pRpData.fillCol = a->fillCol;
 	
@@ -44,8 +44,7 @@ __kernel void raytrace( __constant rt_cl_raytrace_args *a,
 	pRpData.vertexCount = a->vertexCount;	
 		
 	pRpData.w = a->w;
-	pRpData.w = a->h;
-
+	pRpData.h = a->h;
 
 	for ( i = 0; i < a->ydelta; ++i )
 		for ( j = 0; j < a->xdelta; ++j )

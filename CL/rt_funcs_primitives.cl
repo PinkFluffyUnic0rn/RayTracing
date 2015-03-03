@@ -150,7 +150,7 @@ inline void rt_get_triangle_point( rt_cl_render_pipe_data *pRp, rt_ray *pRay,
 	*pNormal = u*pRp->vertexBuf[pRp->trianglesBuf[prN].v1].norm
 		+ v*pRp->vertexBuf[pRp->trianglesBuf[prN].v2].norm 
 		+ ( 1.0f - u - v )
-		* pRp->vertexBuf[pRp->trianglesBuf[prN].v0].norm;  
+		* pRp->vertexBuf[pRp->trianglesBuf[prN].v0].norm;
 }
 
 inline void rt_get_nearest_in_last( rt_cl_render_pipe_data *pRp, rt_ray *pR, 
@@ -160,7 +160,7 @@ inline void rt_get_nearest_in_last( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 	ulong i;
 	ulong intrsC = 0;
 	ulong sz = pRp->kdtreeNodesBuf[nodeIdx].primsCount;
-	*nearestB = 0;
+	
 	for ( i = 0; i < sz; ++i )
 	{
 		int b;
@@ -238,7 +238,6 @@ inline void rt_get_nearest_triangle( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 	float stackFar[KDTREE_DEPTH];
 	int stackPos = 0;
 
-	*nearestB = 0;
 
 	if ( !rt_box_ray_intersection( &(pRp->boundingBox), pR, &tNear, &tFar ) )
 		return;
@@ -321,7 +320,6 @@ inline void rt_get_nearest_prim( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 {
 	ulong i;
 
-	*nearestB = 0;
 
 	for ( i = 0; i < pRp->primsCount; ++i )
 	{
@@ -364,14 +362,13 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 	ulong i;
 	rt_material tmpMat;
 
-
 	rays[0] = *pR;
 	
 	for ( i = 0; i < NODES_COUNT; ++i )
 	{
 		float prMinT, trMinT, trMinU, trMinV;
 		ulong prN, trN;
-		int prNearestB, trNearestB;
+		int prNearestB = 0, trNearestB = 0;
 		float nRel, cosI, cosT;
 
 		if ( (i != 0) && (bNearest[(i-1) / 2] == 0) )
@@ -379,7 +376,7 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 			bNearest[i] = 0;
 			continue;
 		}
-
+		
 		rt_get_nearest_prim( pRp, rays + i, &prMinT, &prN, &prNearestB );
 		rt_get_nearest_triangle( pRp, rays + i, &trMinT, &trMinU, &trMinV,
 			&trN, &trNearestB ); 
@@ -389,8 +386,7 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 			bNearest[i] = 0;
 			continue;
 		}
-
-
+		
 		if ( (trNearestB && !prNearestB)
 			 || (trNearestB && prNearestB && trMinT < prMinT) )
 		{
@@ -419,6 +415,8 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 		//calculate reflected ray
 		rays[2 * i + 1].dest = rt_vector3_reflect( rays[i].dest, n[i] );
 		rays[2 * i + 1].src = p[i] + rays[2 * i + 1].dest * EPSILON;
+		//rays[2 * i + 1].src = nextafter( p[i], rays[2 * i + 1].dest );
+		
 		rays[2 * i + 1].invDest = 1.0f / rays[2 * i + 1].dest;
 
 		//calculate refracted ray	
@@ -446,6 +444,7 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 	for ( i = 0; i < NODES_COUNT; ++i )
 		col[i] = bNearest[i] ? pRp->materialBuf[pPrMat[i]].color : pRp->fillCol;
 
+
 	for ( i = NODES_COUNT-1; i > 0; --i )
 	{
  		rt_material tmpMat;
@@ -467,20 +466,22 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 			col[(i - 1) / 2].r += col[i].r * tmpRef.r;
 			col[(i - 1) / 2].g += col[i].g * tmpRef.g;
 			col[(i - 1) / 2].b += col[i].b * tmpRef.b;
-			col[(i - 1) / 2].a += col[i].a * tmpRef.a;
 		}
 		else
 		{
+			float dist = length( p[(i - 1) / 2] - p[i] );
 			float alpha = pRp->materialBuf[pPrMat[(i - 1) / 2]].color.a;
+			float refr = 1.0 - alpha;
+
 			col[(i - 1) / 2].r = col[(i - 1) / 2].r
-				* alpha + col[i].r * (1.0 - alpha);
+				* alpha + col[i].r * refr;
 			col[(i - 1) / 2].g = col[(i - 1) / 2].g
-				* alpha + col[i].g * (1.0 - alpha);
+				* alpha + col[i].g * refr;
 			col[(i - 1) / 2].b = col[(i - 1) / 2].b
-				* alpha + col[i].b * (1.0 - alpha);
+				* alpha + col[i].b * refr;
 		}
 	}
-
+	
 	tmpMat = pRp->materialBuf[pPrMat[0]];
 	rt_light_point( pRp, p, n, col, &tmpMat, &(rays[0].src) );
 	

@@ -16,13 +16,13 @@
 
 #define SPHERE_COUNT           10
 #define POINT_LIGHTS_COUNT     1
-#define SQUARES_COUNT_SQRT     15
+#define SQUARES_COUNT_SQRT     25
 #define MATERIAL_COUNT         2 + SPHERE_COUNT
 
 #define RENDER_TO_PNGS         0
 #define PNGS_PATH              "pngs/"
 
-#define WIDTH                  1280 
+#define WIDTH                  1280
 #define HEIGHT                 640
 
 GtkWidget *mainWindow;
@@ -36,7 +36,6 @@ guint rotTID;
 rt_render_pipe renderPipe;
 
 rt_sphere sp[SPHERE_COUNT];
-
 rt_triangle tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2];
 rt_verticle vx[(SQUARES_COUNT_SQRT+1)*(SQUARES_COUNT_SQRT+1)];
 rt_point_light lt[POINT_LIGHTS_COUNT];
@@ -51,6 +50,10 @@ int w, h;
 double avr = 0.0f;
 int frm = 0;
 unsigned long int pngN = 0;
+float centralSpherePosY = 0.0f;
+float dT = 0.0001f;
+float oldDT = 0.0001f;
+int paused = 0;
 
 //parameter for spheres moving equasions
 int rotStep( gpointer data )
@@ -58,7 +61,7 @@ int rotStep( gpointer data )
 	if ( t > 2*M_PI )
 		t = 0.0f;
 
-	t += 0.0001f;
+	t += dT;
 
 	gtk_widget_queue_draw(mainWindow);
 
@@ -199,6 +202,26 @@ void keyPress( GtkWidget *w, GdkEvent *e, gpointer usrData )
 		cam->camPos.z -= 1.0f;
 		rt_matrix4_create_translate( &m, 0.0f, 0.0f, 1.0f );
 		goto applyTransform;
+	
+	case GDK_KEY_t:
+		centralSpherePosY -= 0.5f;
+		break;
+
+	case GDK_KEY_y:
+		centralSpherePosY += 0.5f;
+		break;
+
+	case GDK_KEY_g:
+		if ( paused )
+			dT = oldDT;
+		else
+		{
+			oldDT = dT;
+		 	dT = 0.0f;
+		}
+		paused = !paused;
+
+		break;
 
 	default:
 		break;
@@ -236,7 +259,7 @@ void buildPlaneOfTriangles()
 	rt_color_create( col+1, 1.0f, 1.0f, 1.0f, 1.0f );     //ambient
 	rt_color_create( col+2, 1.0f, 1.0f, 1.0f, 1.0f );     //diffuse
 	rt_color_create( col+3, 3.5f, 0.25f, 0.25f, 0.25f );  //specular
-	rt_color_create( col+4, 1.0f, 1.0f, 1.0f, 1.0f );     //reflect
+	rt_color_create( col+4, 0.0f, 1.0f, 1.0f, 1.0f );     //reflect
 	rt_material_create( mt, col, col+1, col+2, 
 		col+3, col+4, 1.33f );
 		
@@ -273,12 +296,14 @@ void buildPlaneOfTriangles()
 			tr[k].pV0 = pointsInRow*i + j;
 			tr[k].pV1 = pointsInRow*(i+1) + j;
 			tr[k].pV2 = pointsInRow*i + (j+1);
+			tr[k].mat = 0;
 
 			++k;
 
 			tr[k].pV0 = pointsInRow*(i+1) + (j+1);
 			tr[k].pV1 = pointsInRow*i + (j+1);
 			tr[k].pV2 = pointsInRow*(i+1) + j;
+			tr[k].mat = 0;
 
 			++k;
 		}
@@ -298,7 +323,6 @@ void buildPlaneOfTriangles()
 			&(vx[i2].pos), &e2 );
 		rt_vector3_cross( &e1, &e2, v );
 				
-				
 		rt_vector3_add( &(vx[i0].norm), 
 			v, &(vx[i0].norm) );
 		rt_vector3_add( &(vx[i1].norm), 
@@ -307,7 +331,7 @@ void buildPlaneOfTriangles()
 			v, &(vx[i2].norm) );
 	}
 		
-	//normilize normals	
+	//normalize normals	
 	for ( i = 0; i < pointsInRow*pointsInRow; ++i )
 		rt_vector3_normalize( &(vx[i].norm), 
 			&(vx[i].norm) );
@@ -341,8 +365,11 @@ void draw( GtkWidget *wgt, cairo_t *cr, gpointer ud )
 
 	//add primitives to render pipe
 	if ( SPHERE_COUNT > 0 )
+	{
+		sp[0].pos.y = centralSpherePosY;
 		rt_render_pipe_add_primitive( &renderPipe, 
 			(void *)(&sp[0]), RT_PT_SPHERE );
+	}
 
 	//make the other spheres flying around the first one,
 	radius = 25.0f + 25.0f*(0.5f+sin(10.0f*t)*0.5f);
@@ -372,7 +399,7 @@ void draw( GtkWidget *wgt, cairo_t *cr, gpointer ud )
 	renderedImage = rt_render_pipe_draw( &renderPipe );
 
 	//draw buffer to screen
-	memcpy( data, renderedImage, sizeof(rt_argb) * w * h );
+	memcpy( data, renderedImage, sizeof(rt_argb) * WIDTH * HEIGHT );
 	cairo_set_source_surface(cr, csur, 0, 0 );
 	cairo_paint(cr);
 
@@ -415,6 +442,9 @@ int main( int argc, char *argv[] )
 	w = WIDTH;
 	h = HEIGHT;
 
+	//init rt
+	rt_init( *argv );
+
 	//create dir for writing images, if it doesn't exists
 	if ( RENDER_TO_PNGS )
 	{
@@ -438,12 +468,12 @@ int main( int argc, char *argv[] )
 		rt_color_create( col+1, 1.0f, 1.0f, 1.0f, 1.0f );     //ambient
 		rt_color_create( col+2, 1.0f, 1.0f, 1.0f, 1.0f );     //diffuse
 		rt_color_create( col+3, 25.0f, 0.75f, 0.75f, 0.75f ); //specular
-		rt_color_create( col+4, 0.0f, 1.f, 1.0f, 1.0f );      //reflect
-		rt_material_create( mt+2, col, col+1, col+2, 
+		rt_color_create( col+4, 0.0f, 1.0f, 1.0f, 1.0f );     //reflect
+		rt_material_create( mt+1, col, col+1, col+2, 
 			col+3, col+4, 1.33f );
 	
 		rt_vector3_create( v, 0.0f, 0.0f, 50.0f );
-		rt_sphere_create( sp, v, 10.0f, 2 );
+		rt_sphere_create( sp, v, 10.0f, 1 );
 	}
  		
 	//create other spheres
@@ -454,10 +484,10 @@ int main( int argc, char *argv[] )
 			(rt_float)(rand()%16365)/16384.0f, 
 			(rt_float)(rand()%16365)/16384.0f );
 		rt_color_create( col+3, 25.0f, 0.75f, 0.75f, 0.75f );
-		rt_material_create( mt+2+i, col, col+1, col+2, 
+		rt_material_create( mt+1+i, col, col+1, col+2, 
 			col+3, col+4, 1.0f );
 			
-		rt_sphere_create( &sp[i], v, 3.66541f, 2+i );
+		rt_sphere_create( &sp[i], v, 3.66541f, 1+i );
 
 		koef[i] = (rt_float)(rand()%101);
 	}
@@ -475,7 +505,7 @@ int main( int argc, char *argv[] )
 
 	rt_render_pipe_set_camera( &renderPipe, &frust );
 
-	//cet camera position
+	//set camera position
 	renderPipe.cam->world._11 = 1.0f;          
 	renderPipe.cam->world._12 = 0.0f;          
 	renderPipe.cam->world._13 = 0.0f;          
@@ -486,7 +516,6 @@ int main( int argc, char *argv[] )
 	renderPipe.cam->world._23 = -0.248690f;    
 	renderPipe.cam->world._24 = 0.0f;          
                                                    
-	renderPipe.cam->world._31 = 0.0f;          
 	renderPipe.cam->world._31 = 0.0f;          
 	renderPipe.cam->world._32 = 0.248690f;     
 	renderPipe.cam->world._33 = 0.968582f;     

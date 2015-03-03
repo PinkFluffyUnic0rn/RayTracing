@@ -161,11 +161,6 @@ inline int rt_ray_triangle_intersection( rt_cl_render_pipe_data *pRp,
 	return 0;
 }
 
-inline int rt_ray_line_intersection( rt_ray *pRay, rt_line *pLine, float *t )
-{
-
-}
-
 int rt_box_ray_intersection( rt_box *pC, rt_ray *pR, float *tNear, float *tFar )
 {
 	// 2D example, almost same for 3D

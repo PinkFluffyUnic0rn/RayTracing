@@ -10,8 +10,13 @@
 #include "rt_funcs_primitives.h"
 #include "rt_funcs_math.h"
 
-void rt_render_pipe_create( rt_render_pipe *pRp, int w, int h,
-	void *sD );
+char *rt_cl_include_path;
+char *rt_cl_raytrace_kernel_path;
+
+void rt_init( char *path );
+
+void rt_render_pipe_create( rt_render_pipe *pRp, int w, 
+	int h, void *sD );
 
 void rt_init_buffers( rt_render_pipe *pRp );
 

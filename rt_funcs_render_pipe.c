@@ -1,5 +1,22 @@
 #include "rt_funcs_render_pipe.h"
 
+void rt_init( char *path )
+{
+	size_t sz = strlen( path );
+	size_t szRt = strlen( "/CL/rt_raytrace.cl" );
+	size_t tmpP = sz - 1;
+
+	while ( path[tmpP] != '/' && tmpP != 0  )
+		--tmpP;
+	
+	rt_cl_include_path = malloc( sizeof(char) * tmpP );
+	rt_cl_raytrace_kernel_path = malloc( sizeof(char) * (tmpP + szRt) );
+
+	strncpy( rt_cl_include_path, path, tmpP );
+	strncpy( rt_cl_raytrace_kernel_path, path, tmpP );
+	strcat( rt_cl_raytrace_kernel_path, "/CL/rt_raytrace.cl" );
+}
+
 void rt_render_pipe_create( rt_render_pipe *pRp, int w, int h,
 	void *pSD )
 {
@@ -46,10 +63,6 @@ void rt_init_buffers( rt_render_pipe *pRp )
 
 	pRp->memm = clCreateBuffer( pRp->oclContent.context, CL_MEM_READ_ONLY, 
 		sizeof(rt_material)*MATERIALS_IN_BLOCK, NULL, NULL );
-
-	pRp->memtp = clCreateBuffer( pRp->oclContent.context, CL_MEM_READ_ONLY, 
-		sizeof(rt_ulong)*TRIANGLES_IN_BLOCK, NULL, NULL );
-
 }
 
 void rt_render_pipe_set_camera( rt_render_pipe *pRp, 
@@ -205,10 +218,12 @@ void rt_init_opencl( rt_render_pipe *pRp )
 	int i;
 	cl_int ret;
 		
+	//printf( "***: %s\n", rt_cl_raytrace_kernel_path );
 	size_t progsrcsz;
-	FILE *fp = fopen( RT_CL_RAYTRACE_PATH, "r" );
+	FILE *fp = fopen( rt_cl_raytrace_kernel_path, "r" );
 	char *progsrc = (char *) malloc(0x10000000);
 	
+
 	if ( pRp == NULL )
 		exit( -1 );
 
@@ -224,19 +239,24 @@ void rt_init_opencl( rt_render_pipe *pRp )
 
 		clGetPlatformInfo( ocl->plID[0], CL_PLATFORM_NAME, 
 			1024, tmp, NULL );
-//		printf( "choosen platform: %s\n", tmp );
+		printf( "choosen platform: %s\n", tmp );
 		
 		clGetDeviceInfo( ocl->devID[0][0], CL_DEVICE_NAME,
 			1024, tmp, NULL );
 		
-//		printf( "choosen device: %s\n", tmp );
+		printf( "choosen device: %s\n", tmp );
+
+		clGetDeviceInfo( ocl->devID[0][0], CL_DEVICE_MAX_COMPUTE_UNITS,
+			sizeof(cl_uint), &(ocl->computeUnitsCount), NULL );
+
+		printf( "compute units count: %u\n", ocl->computeUnitsCount );
 	}
 	
 	ocl->context = clCreateContext( NULL, 1, (ocl->devID)[0], NULL, 
 		NULL, &ret );
 	ocl->commQue = clCreateCommandQueue( ocl->context, 
 		(ocl->devID)[0][0], 0, &ret );
-	
+		
 	if ( fp == NULL )
 	{
 		printf( "open file error\n" );
@@ -256,8 +276,14 @@ void rt_init_opencl( rt_render_pipe *pRp )
 		exit( -3 );
 	}
 
+	char *clArgs = malloc( sizeof(char) 
+		* ( strlen(rt_cl_include_path) + 4) );
+
+	strcpy( clArgs, "-I " );
+	strcat( clArgs, rt_cl_include_path );
+
 	ret = clBuildProgram( ocl->prog, 1, (ocl->devID)[0],
-		RT_CL_RAYTRACE_ARGS, NULL, NULL );
+		clArgs, NULL, NULL );
 
 	if ( ret != CL_SUCCESS )
 	{
@@ -334,6 +360,7 @@ void rt_opencl_render( rt_render_pipe *pRp )
 	// enqueue threads
 	{
 		size_t gwSz[2] = { pRp->w, pRp->h };
+		size_t wgSz[2] = { 16, 8 };
 
 		clSetKernelArg( pOcl->raytrace, 0, 
 			sizeof(cl_mem), (void *) &mema );
@@ -361,7 +388,7 @@ void rt_opencl_render( rt_render_pipe *pRp )
 			sizeof(cl_mem), (void *) &memout );
 
 		clEnqueueNDRangeKernel( pOcl->commQue, pOcl->raytrace, 2, 
-			NULL, gwSz, 0, 0, NULL, NULL );	
+			NULL, gwSz, wgSz, 0, NULL, NULL );	
 	}
 	
 	clEnqueueReadBuffer( pOcl->commQue, memout, CL_TRUE, 0, 
@@ -377,6 +404,9 @@ void rt_cleanup( rt_render_pipe *pRp )
 {
 	if ( pRp == NULL )
 		exit( -1 );
+
+	free( pRp->cam );
+	free( pRp->screenData );
 
 	clReleaseMemObject( pRp->memp );	
 	clReleaseMemObject( pRp->mempdecs );
