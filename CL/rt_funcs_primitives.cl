@@ -5,86 +5,6 @@
 #include "CL/rt_funcs_math.cl"
 #include "CL/rt_intersection.cl"
 
-inline void rt_light_point( rt_cl_render_pipe_data *pRp, rt_vector3 *pV,
-	rt_vector3 *pN, rt_color *pCol, rt_material *pMat, 
-	rt_vector3 *pViewerPos )
-{
-	ulong o;
-	rt_color tmpCol, sumC;
-
-	rt_color_create( &sumC, 1.0f, 0.0f, 0.0f, 0.0f );
-	
-	for ( o = 0; o < pRp->lightsCount; ++o )
-		if ( (pRp->lightsDecs)[o].lt == RT_LT_POINT )
-		{
-			rt_point_light tmpL;
-			float d; 
- 			rt_vector3 toLight;
-			float ang;
-			rt_color diffuse;
-			rt_color specular;
-
-			rt_color_create( &specular, 0.0f, 0.0f, 0.0f, 0.0f );
-			rt_color_create( &diffuse, 0.0f, 0.0f, 0.0f, 0.0f );
-
-			tmpL = *((__global const rt_point_light *)(pRp->lightsBuf
-				+pRp->lightsDecs[o].offset));
-	
-			toLight = tmpL.pos - *pV;
-			d = length( toLight );
-			toLight /= d;
-
-			if ( DIFFUSE_ENABLED )
-			{
-				ang = max( 0.0f, dot( *pN, toLight ));
-
-				diffuse = tmpL.col;
-
-				rt_color_mult( &diffuse, &(pMat->diffuse), 
-					&diffuse );
-
-				rt_color_scalar_mult( &diffuse, 
-					ang*(tmpL.rad)/d, 
-					&diffuse );
-			}
-			else
-				rt_color_create( &diffuse, 
-					1.0f, 1.0f, 1.0f, 1.0f );
-
-			if ( SPECULAR_ENABLED )
-			{
-				float specFact;	
-				rt_vector3 toEye;
-
-				toLight *= -1.0f;
-				toLight = rt_vector3_reflect( toLight, *pN );
-
-				toEye = *pViewerPos - *pV;
-			
-				toEye = normalize( toEye );
-								
-				ang = dot( toEye, toLight );
-
-				specFact = pow( max(ang, 0.0f),
-					pMat->specular.a );
-
-				specular = pMat->specular;
-	
-				rt_color_mult( &specular, &(tmpL.col), 
-					&specular );
-
-				rt_color_scalar_mult( &specular, 
-					specFact, &specular );
-			} 
-				
-			rt_color_mult( &diffuse, pCol, 
-				&diffuse );
-
-			rt_color_add( &diffuse, &specular, &tmpCol );
-			rt_color_add( &sumC, &tmpCol, &sumC ); 
-		}
-	*pCol = sumC;
-}
 
 inline ulong rt_primitive_get_material( rt_cl_render_pipe_data *pRp, 
 	ulong prN )
@@ -315,6 +235,119 @@ inline void rt_get_nearest_triangle( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 	}
 }
 
+inline void rt_add_alpha_in_last( rt_cl_render_pipe_data *pRp, rt_ray *pR, 
+	ulong nodeIdx, float d, float *alpha)
+{
+	ulong i;
+	ulong intrsC = 0;
+	ulong sz = pRp->kdtreeNodesBuf[nodeIdx].primsCount;
+
+	for ( i = 0; i < sz; ++i )
+	{
+		int b;
+		rt_triangle tmpT;
+		float t, u, v;
+		ulong primsOffset = pRp->kdtreePrimsIdxBuf[
+			pRp->kdtreeNodesBuf[nodeIdx].prims + i];
+		
+		tmpT = (pRp->trianglesBuf)[primsOffset];
+		b = rt_ray_triangle_intersection( pRp, pR, &tmpT, &t, &u, &v );
+	
+
+		if ( b && t < d )
+		{
+			*alpha += pRp->materialBuf[pRp->trianglesBuf[primsOffset].mat].color.a;
+
+		}
+	}
+
+}
+
+inline void rt_get_alpha_triangles( rt_cl_render_pipe_data *pRp, rt_ray *pR, 
+	float d, float *alpha )
+{
+	float tNear, tFar, tSplit;
+	ulong currentNode = 0;
+	ulong nearNode, farNode;
+	ulong stack[KDTREE_DEPTH];
+	float stackFar[KDTREE_DEPTH];
+	int stackPos = 0;
+
+
+	if ( !rt_box_ray_intersection( &(pRp->boundingBox), pR, &tNear, &tFar ) )
+		return;
+
+	*alpha = 0.0f;
+
+	while ( 1 )
+	{
+		if ( pRp->kdtreeNodesBuf[currentNode].isLast )
+		{
+			rt_add_alpha_in_last( pRp, pR, currentNode, d, alpha );
+			
+			if ( stackPos )
+			{
+				currentNode = stack[--stackPos];
+				tFar = stackFar[stackPos];
+			}
+			else
+				return;
+		}
+		else
+		{
+			rt_aparallel_ray_plane_intersection( pR, 
+				pRp->kdtreeNodesBuf[currentNode].axis, 
+				pRp->kdtreeNodesBuf[currentNode].sep, &tSplit );
+	
+			nearNode = pRp->kdtreeNodesBuf[currentNode].leftNode;
+			farNode = pRp->kdtreeNodesBuf[currentNode].rightNode;
+
+			switch ( pRp->kdtreeNodesBuf[currentNode].axis )
+			{
+			case RT_AXIS_X:
+				if ( pR->dest.x < 0.0f )
+				{
+					ulong tmp = nearNode;
+					nearNode = farNode;
+					farNode = tmp;
+				}
+				break;
+	
+			case RT_AXIS_Y:
+				if ( pR->dest.y < 0.0f )
+				{
+					ulong tmp = nearNode;
+					nearNode = farNode;
+					farNode = tmp;
+				}
+				break;
+	
+			case RT_AXIS_Z:
+				if ( pR->dest.z < 0.0f )
+				{
+					ulong tmp = nearNode;
+					nearNode = farNode;
+					farNode = tmp;
+				}
+				break;
+			}
+
+			if ( tSplit >= tFar )
+				currentNode = nearNode;
+			else if ( tSplit <= tNear )
+				currentNode = farNode;
+			else
+			{
+				stack[stackPos] = farNode;
+				stackFar[stackPos++] = tFar;
+				
+				currentNode = nearNode;
+				tFar = tSplit;
+			}
+		}
+	}
+}
+
 inline void rt_get_nearest_prim( rt_cl_render_pipe_data *pRp, rt_ray *pR, 
 	float *minT, ulong *prN, int *nearestB )
 {
@@ -350,18 +383,157 @@ inline void rt_get_nearest_prim( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 	}
 }
 
+inline void rt_get_alpha_prims( rt_cl_render_pipe_data *pRp, rt_ray *pR, 
+	float d, float *alpha )
+{
+	ulong i;
+
+	*alpha = 0.0f;
+
+	for ( i = 0; i < pRp->primsCount; ++i )
+	{
+		int b;
+		float t;
+		
+		RT_PRIMITIVE_TYPE tmp = pRp->primsDecs[i].pt;
+
+		if ( tmp == RT_PT_SPHERE )
+		{
+			rt_sphere tmpS 
+				= *((__global const rt_sphere *)(pRp->primsBuf
+				+ pRp->primsDecs[i].offset));
+			b = rt_ray_sphere_intersection( pR, &tmpS, &t );	
+		}
+
+
+		if ( b && t < d )
+		{
+			*alpha += pRp->materialBuf[((__global const rt_sphere *)(pRp->primsBuf
+				+ pRp->primsDecs[i].offset))->mat].color.a;
+		}
+
+	}
+}
+
+inline void rt_light_point( rt_cl_render_pipe_data *pRp, rt_vector3 *pV,
+	rt_vector3 *pN, rt_color *pCol, rt_material *pMat, 
+	rt_vector3 *pViewerPos )
+{
+	ulong o;
+	rt_color tmpCol;
+
+	rt_color_create( pCol, 0.0f, 0.0f, 0.0f, 0.0f );
+
+	for ( o = 0; o < pRp->lightsCount; ++o )
+		if ( (pRp->lightsDecs)[o].lt == RT_LT_POINT )
+		{
+			rt_point_light tmpL;
+			float d; 
+ 			rt_vector3 toLight;
+			float ang;
+			rt_color diffuse;
+			rt_color specular;
+			float shadowed = 0.0f;
+
+			rt_color_create( &specular, 0.0f, 0.0f, 0.0f, 0.0f );
+			rt_color_create( &diffuse, 0.0f, 0.0f, 0.0f, 0.0f );
+
+			tmpL = *((__global const rt_point_light *)(pRp->lightsBuf
+				+pRp->lightsDecs[o].offset));
+
+			toLight = tmpL.pos - *pV;
+			d = length( toLight );
+			toLight /= d;
+
+			if ( SHADOWS_ENABLED )
+			{
+				rt_ray shadowRay;
+			
+				float t;
+				float u, v;
+				int nearestB = 0;
+				int prN;
+				
+				float a;
+				
+				shadowRay.dest = toLight;
+				shadowRay.src = *pV + toLight * EPSILON;
+				shadowRay.invDest = 1.0f / toLight;
+
+				rt_get_alpha_prims( pRp, &shadowRay, d, &a );
+				
+				shadowed = rt_clamp_float(a, 0.0f, 1.0f);
+
+				rt_get_alpha_triangles( pRp, &shadowRay, d, &a ); 
+
+				shadowed += rt_clamp_float(a, 0.0f, 1.0f);
+				shadowed *= pMat->color.a;
+			}
+
+			if ( DIFFUSE_ENABLED )
+			{
+				ang = max( 0.0f, dot( *pN, toLight ));
+
+				diffuse = tmpL.col;
+
+				rt_color_mult( &diffuse, &(pMat->diffuse), 
+					&diffuse );
+
+				rt_color_mult( &diffuse, &(pMat->color), 
+					&diffuse );
+
+				rt_color_scalar_mult( &diffuse, 
+					ang * (tmpL.rad) / d, 
+					&diffuse );
+
+			}
+			else
+				rt_color_create( &diffuse, 0.0f, pMat->color.r,
+					pMat->color.g, pMat->color.b );
+
+			if ( SPECULAR_ENABLED )
+			{
+				float specFact;	
+				rt_vector3 toEye;
+
+				toLight *= -1.0f;
+				toLight = rt_vector3_reflect( toLight, *pN );
+
+				toEye = *pViewerPos - *pV;
+			
+				toEye = normalize( toEye );
+								
+				ang = dot( toEye, toLight );
+
+				specFact = pow( max(ang, 0.0f),
+					pMat->specular.a );
+
+				specular = pMat->specular;
+	
+				rt_color_mult( &specular, &(tmpL.col), 
+					&specular );
+
+				rt_color_scalar_mult( &specular, 
+					specFact, &specular );
+			} 
+		
+			rt_color_add( &diffuse, &specular, &tmpCol );
+			rt_color_scalar_mult( &tmpCol, 1.0f - shadowed, &tmpCol );
+			rt_color_add( &tmpCol, pCol, pCol );
+		}
+}
+
 inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp, 
 	rt_ray *pR, int depth )
 {
+	rt_ray rays[NODES_COUNT];
 	rt_color col[NODES_COUNT];
-	int bNearest[NODES_COUNT];
 	rt_vector3 p[NODES_COUNT];
 	rt_vector3 n[NODES_COUNT];
-	rt_ray rays[NODES_COUNT];
 	ulong pPrMat[NODES_COUNT];
-	ulong i;
+	int bNearest[NODES_COUNT];
 	rt_material tmpMat;
-
+	ulong i;
 	rays[0] = *pR;
 	
 	for ( i = 0; i < NODES_COUNT; ++i )
@@ -371,6 +543,8 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 		int prNearestB = 0, trNearestB = 0;
 		float nRel, cosI, cosT;
 
+		col[i] =  pRp->fillCol;
+		
 		if ( (i != 0) && (bNearest[(i-1) / 2] == 0) )
 		{
 			bNearest[i] = 0;
@@ -386,7 +560,8 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 			bNearest[i] = 0;
 			continue;
 		}
-		
+
+
 		if ( (trNearestB && !prNearestB)
 			 || (trNearestB && prNearestB && trMinT < prMinT) )
 		{
@@ -408,15 +583,21 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 			rt_get_point_from_ray( pRp, rays + i, prNearestB, prN, 
 				prMinT, p + i, n + i );
 		}
-		
+
 		if ( i >= LIM_NEW_RAYS )
-			continue;
+		{
+			rt_material tmpMat = pRp->materialBuf[pPrMat[i]];
 		
+			rt_light_point( pRp, p + i, n + i, 
+				col + i, &tmpMat, 
+				&(rays[i].src) );
+	
+			continue;
+		}
+
 		//calculate reflected ray
 		rays[2 * i + 1].dest = rt_vector3_reflect( rays[i].dest, n[i] );
 		rays[2 * i + 1].src = p[i] + rays[2 * i + 1].dest * EPSILON;
-		//rays[2 * i + 1].src = nextafter( p[i], rays[2 * i + 1].dest );
-		
 		rays[2 * i + 1].invDest = 1.0f / rays[2 * i + 1].dest;
 
 		//calculate refracted ray	
@@ -430,61 +611,64 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 			continue;
 		}
 
-		rays[2 * i + 2].dest
-			= normalize( rays[i].dest * nRel + n[i] * (nRel * cosI 
-			- sqrt( cosT )) );
-		rays[2 * i + 2].src 
-			= p[i] + rays[2 * i + 2].dest * EPSILON;
+		rays[2 * i + 2].dest = normalize( rays[i].dest * nRel 
+			+ n[i] * (nRel * cosI - sqrt( cosT )) );
+		rays[2 * i + 2].src = p[i] + rays[2 * i + 2].dest * EPSILON;
 		rays[2 * i + 2].invDest = 1.0f / rays[2 * i + 2].dest;
 	}
 
 	if ( !bNearest[0] )
 		return pRp->fillCol;
 
-	for ( i = 0; i < NODES_COUNT; ++i )
-		col[i] = bNearest[i] ? pRp->materialBuf[pPrMat[i]].color : pRp->fillCol;
-
-
 	for ( i = NODES_COUNT-1; i > 0; --i )
 	{
- 		rt_material tmpMat;
+		ulong parentIdx = (i - 1) / 2;
 
-		if (bNearest[(i - 1) / 2] == 0) 
+		if (bNearest[parentIdx] == 0) 
 			continue;
-
-		if ( bNearest[i] )
-		{
-			tmpMat = pRp->materialBuf[pPrMat[i]];
-			rt_light_point( pRp, p + i, n + i, col + i, &tmpMat, 
-				&(rays[i].src) );
-		}
 
 		if ( i % 2 )
 		{
-			rt_color tmpRef = pRp->materialBuf[pPrMat[(i - 1) / 2]].reflect;
-			
-			col[(i - 1) / 2].r += col[i].r * tmpRef.r;
-			col[(i - 1) / 2].g += col[i].g * tmpRef.g;
-			col[(i - 1) / 2].b += col[i].b * tmpRef.b;
+			if ( bNearest[parentIdx] == 1 )
+			{
+ 				rt_material tmpMat = pRp->materialBuf[pPrMat[parentIdx]];
+				rt_color primRef = tmpMat.reflect;
+
+				col[parentIdx].r += col[i].r * primRef.r;
+				col[parentIdx].g += col[i].g * primRef.g;
+				col[parentIdx].b += col[i].b * primRef.b;
+
+				rt_color_clamp( col + parentIdx, col + parentIdx );
+			}
 		}
 		else
 		{
-			float dist = length( p[(i - 1) / 2] - p[i] );
-			float alpha = pRp->materialBuf[pPrMat[(i - 1) / 2]].color.a;
-			float refr = 1.0 - alpha;
+			rt_color primCol = pRp->materialBuf[pPrMat[parentIdx]].color;
+			float alpha = pRp->materialBuf[pPrMat[parentIdx]].color.a;
+			float dist;
+			float refr = ( 1.0f - alpha );
+ 			rt_material tmpMat = pRp->materialBuf[pPrMat[parentIdx]];
+		
+			rt_light_point( pRp, p + parentIdx, n + parentIdx, 
+				col + parentIdx, &tmpMat, &(rays[parentIdx].src) );
 
-			col[(i - 1) / 2].r = col[(i - 1) / 2].r
-				* alpha + col[i].r * refr;
-			col[(i - 1) / 2].g = col[(i - 1) / 2].g
-				* alpha + col[i].g * refr;
-			col[(i - 1) / 2].b = col[(i - 1) / 2].b
-				* alpha + col[i].b * refr;
+			if ( bNearest[i] )
+			{
+				dist = length( p[parentIdx] - p[i] );
+				refr *= exp( pRp->materialBuf[
+					pPrMat[parentIdx]].lightFalloff 
+					* -dist );
+			}
+
+			col[parentIdx].r = col[parentIdx].r * alpha
+				+ col[i].r * refr;
+			col[parentIdx].g = col[parentIdx].g * alpha
+				+ col[i].g * refr;
+			col[parentIdx].b = col[parentIdx].b * alpha
+				+ col[i].b * refr;
 		}
 	}
-	
-	tmpMat = pRp->materialBuf[pPrMat[0]];
-	rt_light_point( pRp, p, n, col, &tmpMat, &(rays[0].src) );
-	
+
 	return col[0];
 }
 

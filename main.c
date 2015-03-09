@@ -16,7 +16,7 @@
 
 #define SPHERE_COUNT           10
 #define POINT_LIGHTS_COUNT     1
-#define SQUARES_COUNT_SQRT     25
+#define SQUARES_COUNT_SQRT     50
 #define MATERIAL_COUNT         2 + SPHERE_COUNT
 
 #define RENDER_TO_PNGS         0
@@ -24,6 +24,13 @@
 
 #define WIDTH                  1280
 #define HEIGHT                 640
+
+typedef struct _wave
+{
+	float period;
+	float amplitude;
+	rt_vector3 dir;
+} wave;
 
 GtkWidget *mainWindow;
 GtkWidget *drawArea;
@@ -52,7 +59,7 @@ int frm = 0;
 unsigned long int pngN = 0;
 float centralSpherePosY = 0.0f;
 float dT = 0.0001f;
-float oldDT = 0.0001f;
+float oldDT = 0.001f;
 int paused = 0;
 
 //parameter for spheres moving equasions
@@ -223,6 +230,14 @@ void keyPress( GtkWidget *w, GdkEvent *e, gpointer usrData )
 
 		break;
 
+	case GDK_KEY_equal:
+		dT += 0.0001f;
+		break;
+
+	case GDK_KEY_minus:
+		dT -= 0.0001f;
+		break;
+
 	default:
 		break;
 
@@ -255,13 +270,13 @@ void buildPlaneOfTriangles()
 
 	int i, j, k;
 
-	rt_color_create( col, 0.5f, 0.223f, 0.345f, 0.474f ); //color
-	rt_color_create( col+1, 1.0f, 1.0f, 1.0f, 1.0f );     //ambient
-	rt_color_create( col+2, 1.0f, 1.0f, 1.0f, 1.0f );     //diffuse
-	rt_color_create( col+3, 3.5f, 0.25f, 0.25f, 0.25f );  //specular
-	rt_color_create( col+4, 0.0f, 1.0f, 1.0f, 1.0f );     //reflect
+	rt_color_create( col, 0.5f, 0.223f, 0.345f, 0.474f );   //color
+	rt_color_create( col+1, 0.0f, 1.0f, 1.0f, 1.0f );       //ambient
+	rt_color_create( col+2, 0.0f, 0.75f, 0.75f, 0.75f );    //diffuse
+	rt_color_create( col+3, 3.5f, 0.25f, 0.25f, 0.25f );       //specular
+	rt_color_create( col+4, 0.0f, 0.2f, 0.2f, 0.2f );       //reflect
 	rt_material_create( mt, col, col+1, col+2, 
-		col+3, col+4, 1.33f );
+		col+3, col+4, 0.005, 1.33f );
 		
 	#pragma GCC diagnostic ignored "-Wdiv-by-zero"
 	rt_vector3 e1, e2;
@@ -272,15 +287,22 @@ void buildPlaneOfTriangles()
 	int pointsInRow = SQUARES_COUNT_SQRT+1;
 	#pragma GCC diagnostic push
 
+
 	//create vertex
 	for ( i = 0; i < pointsInRow; ++i )
 		for ( j = 0; j < pointsInRow; ++j )
 		{
+			float u = ((float) i) / pointsInRow;
+			float v = ((float) j) / pointsInRow;
+			float y = plHt
+				+ sin(100.0 * u + t*0.0f) * 0.5f
+				+ cos(25.0 * v + t*125.0f) * 2.0f
+				+ cos(50.0 * v + t*250.0f) * 1.0f
+				+ cos(200.0 * v + t*500.0f) * 0.5f;
+
 			rt_vector3_create( 
 				&(vx[i*pointsInRow+j].pos),
-				xPos+i*dt,
-				plHt + (sin((xPos+i*dt)*0.1 + t*0.0f)
-				+ cos((zPos+j*dt)*0.1 + t*100.0f)) * 5.0f, 
+				xPos+i*dt, y,
 				zPos+j*dt );
 
 			rt_vector3_create( 
@@ -464,13 +486,13 @@ int main( int argc, char *argv[] )
 	//create fisrt sphere
 	if ( SPHERE_COUNT > 0 )
 	{
-		rt_color_create( col, 0.25f, 0.0f, 0.5f, 1.0f );      //color
-		rt_color_create( col+1, 1.0f, 1.0f, 1.0f, 1.0f );     //ambient
-		rt_color_create( col+2, 1.0f, 1.0f, 1.0f, 1.0f );     //diffuse
-		rt_color_create( col+3, 25.0f, 0.75f, 0.75f, 0.75f ); //specular
-		rt_color_create( col+4, 0.0f, 1.0f, 1.0f, 1.0f );     //reflect
+		rt_color_create( col, 0.5f, 0.0f, 0.5f, 1.0f );      //color
+		rt_color_create( col+1, 0.0f, 0.0f, 0.0f, 0.0f );    //ambient
+		rt_color_create( col+2, 0.0f, 0.2f, 0.2f, 0.2f );    //diffuse
+		rt_color_create( col+3, 15.0f, 0.2f, 0.2f, 0.2f );   //specular
+		rt_color_create( col+4, 0.0f, 0.5f, 0.5f, 0.5f );    //reflect
 		rt_material_create( mt+1, col, col+1, col+2, 
-			col+3, col+4, 1.33f );
+			col+3, col+4, 0.0, 1.33f );
 	
 		rt_vector3_create( v, 0.0f, 0.0f, 50.0f );
 		rt_sphere_create( sp, v, 10.0f, 1 );
@@ -483,9 +505,12 @@ int main( int argc, char *argv[] )
 			(rt_float)(rand()%16365)/16384.0f, 
 			(rt_float)(rand()%16365)/16384.0f, 
 			(rt_float)(rand()%16365)/16384.0f );
-		rt_color_create( col+3, 25.0f, 0.75f, 0.75f, 0.75f );
+		rt_color_create( col+1, 0.0f, 0.0f, 0.0f, 0.0f );    //ambient
+		rt_color_create( col+2, 0.0f, 0.5f, 0.5f, 0.5f );    //diffuse
+		rt_color_create( col+3, 15.0f, 1.0f, 1.0f, 1.0f );   //specular
+		rt_color_create( col+4, 0.0f, 0.5f, 0.5f, 0.5f );    //reflect
 		rt_material_create( mt+1+i, col, col+1, col+2, 
-			col+3, col+4, 1.0f );
+			col+3, col+4, 0.0f, 1.0f );
 			
 		rt_sphere_create( &sp[i], v, 3.66541f, 1+i );
 
@@ -496,7 +521,7 @@ int main( int argc, char *argv[] )
 	rt_color_create( col, 1.0f, 1.0f, 1.0f, 1.0f );
 	rt_vector3_create( v, -20.0f, -35.0f, 0.0f );
 
-	rt_point_light_create( lt, v, 250.0f, col );
+	rt_point_light_create( lt, v, 100.0f, col );
 
 	//initiliaze render pipe
 	rt_camera_create( &frust, WIDTH, HEIGHT, 0.125*M_PI, 100.0f );

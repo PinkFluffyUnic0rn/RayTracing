@@ -1,15 +1,15 @@
 #ifndef RT_TYPES_CL
 #define RT_TYPES_CL
 
-#define RAY_TREE_DEPTH        3
-#define NODES_COUNT           7
-#define LIM_NEW_RAYS          3
+#define RAY_TREE_DEPTH        1//3
+#define NODES_COUNT           1//7
+#define LIM_NEW_RAYS          0//3
 
 #define EPSILON               0.005f              
 
 #define ENV_OPT_DENSITY       1.0f
 
-#define SHADOWS_ENABLED       0
+#define SHADOWS_ENABLED       1
 #define DIFFUSE_ENABLED       1
 #define SPECULAR_ENABLED      1
 
@@ -85,7 +85,10 @@ typedef struct _rt_argb
 
 typedef struct _rt_color
 {
-	float b, g, r, a;
+	float b;
+	float g;
+	float r;
+	float a;
 } rt_color;
 
 typedef struct _rt_material
@@ -95,6 +98,7 @@ typedef struct _rt_material
 	rt_color diffuse;
 	rt_color specular;
 	rt_color reflect;
+	float lightFalloff;
 	float optDens;
 } rt_material;
 

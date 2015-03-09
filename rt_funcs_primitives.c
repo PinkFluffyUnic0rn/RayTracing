@@ -23,7 +23,8 @@ void rt_plane_create( rt_plane *pPl, rt_vector3 *pP,
 }
 
 void rt_material_create( rt_material *pM, rt_color *pC, rt_color *pA,
-	rt_color *pD, rt_color *pS, rt_color *pR, rt_float oD )
+	rt_color *pD, rt_color *pS, rt_color *pR, 
+	rt_float rFoff, rt_float oD )
 {
 	if ( (pM == NULL) || (pC == NULL) || (pA == NULL) 
 		|| (pD == NULL )|| (pS == NULL) || (pR == NULL) )
@@ -34,6 +35,7 @@ void rt_material_create( rt_material *pM, rt_color *pC, rt_color *pA,
 	memcpy( &(pM->diffuse), pD, sizeof(rt_color) );
 	memcpy( &(pM->specular), pS, sizeof(rt_color) );
 	memcpy( &(pM->reflect), pR, sizeof(rt_color) );
+	pM->lightFalloff = rFoff;
 	pM->optDens = oD;
 }
 

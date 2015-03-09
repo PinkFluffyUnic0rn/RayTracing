@@ -507,3 +507,24 @@ inline rt_float maxF( rt_float a, rt_float b )
 {
 	return (a > b) ? a : b;
 }
+
+inline int is_power_of_two_size_t( size_t a )
+{
+	size_t mask = 1;
+	int counter = 0;
+
+	while ( mask != 0 )
+	{
+		if ( a & mask )
+		{
+			++counter;
+
+			if ( counter > 1 )
+				return 0;
+		}
+
+		mask <<= 1;
+	}
+
+	return 1;
+}

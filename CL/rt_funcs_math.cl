@@ -162,7 +162,6 @@ inline void rt_color_clamp( rt_color *pC, rt_color *pR )
 inline void rt_color_mult( rt_color *pC0, rt_color *pC1,
 	rt_color *pR )
 {
-	pR->a = pC0->a * pC1->a;
 	pR->r = pC0->r * pC1->r;
 	pR->g = pC0->g * pC1->g;
 	pR->b = pC0->b * pC1->b;
@@ -173,7 +172,6 @@ inline void rt_color_mult( rt_color *pC0, rt_color *pC1,
 inline void rt_color_add( rt_color *pC0, rt_color *pC1,
 	rt_color *pR )
 {
-	pR->a = pC0->a + pC1->a;
 	pR->r = pC0->r + pC1->r;
 	pR->g = pC0->g + pC1->g;
 	pR->b = pC0->b + pC1->b;
@@ -184,7 +182,6 @@ inline void rt_color_add( rt_color *pC0, rt_color *pC1,
 inline void rt_color_scalar_mult( rt_color *pC, float s,
 	rt_color *pR )
 {
-	pR->a = pC->a*s;
 	pR->r = pC->r*s;
 	pR->g = pC->g*s;
 	pR->b = pC->b*s;

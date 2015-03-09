@@ -23,13 +23,13 @@ void rt_render_pipe_create( rt_render_pipe *pRp, int w, int h,
 	if ( !pRp )
 		exit( -1 );
 
-	rt_init_opencl( pRp );
-	rt_init_buffers( pRp );
-	pRp->cam = malloc( sizeof(rt_camera) );
-
 	pRp->w = w;
 	pRp->h = h;
 
+	rt_init_opencl( pRp );
+	rt_init_buffers( pRp );
+
+	pRp->cam = malloc( sizeof(rt_camera) );
 	pRp->screenData = (rt_argb *) malloc( sizeof(rt_argb) * h * w );
 
 }
@@ -305,6 +305,66 @@ void rt_init_opencl( rt_render_pipe *pRp )
 	}
 	
 	ocl->raytrace = clCreateKernel( ocl->prog, "raytrace", &ret );
+
+	{
+		size_t maxSz;
+
+		clGetDeviceInfo( ocl->devID[0][0], 
+			CL_DEVICE_MAX_WORK_GROUP_SIZE, 
+			sizeof(size_t), &maxSz, NULL );
+
+		ocl->workGroupSz[0] = (size_t) sqrt( maxSz );
+		ocl->workGroupSz[1] = (size_t) sqrt( maxSz );
+
+		ocl->workGroupSz[0] *= ((float)pRp->w < (float)pRp->h) ? 
+			((float)pRp->w / (float)pRp->h) : 1.0f; 
+		ocl->workGroupSz[1] *= ((float)pRp->h < (float)pRp->w) ? 
+			((float)pRp->h / (float)pRp->w) : 1.0f;
+
+
+		if ( !(is_power_of_two_size_t(ocl->workGroupSz[0]) 
+			&& is_power_of_two_size_t(ocl->workGroupSz[1])) )
+		{
+			size_t *minSz = NULL, *maxSz = NULL;
+			size_t maxSzPos = 0, minSzPos = 0;
+			size_t mask;
+
+			if ( ocl->workGroupSz[0] > ocl->workGroupSz[1] )
+			{
+				minSz = ocl->workGroupSz + 1;
+				maxSz = ocl->workGroupSz;
+			}
+			else
+			{
+				minSz = ocl->workGroupSz;
+				maxSz = ocl->workGroupSz + 1;
+			}
+
+			*maxSz <<= 1;
+				
+			mask = (size_t)(1) << (8 * sizeof( size_t ) - 1);
+				
+			while ( !(*maxSz & mask) )
+			{
+				mask >>= 1;
+				++maxSzPos;
+			}
+				
+			mask = (size_t)(1) << (8 * sizeof( size_t ) - 1);
+				
+			while ( !(*minSz & mask) )
+			{
+				mask >>= 1;
+				++minSzPos;
+			}
+
+			*minSz >>= 8 * sizeof(size_t) - minSzPos - 1;
+			*minSz <<= 8 * sizeof(size_t) - minSzPos - 1;
+
+			*maxSz >>= 8 * sizeof(size_t) - maxSzPos - 1;
+			*maxSz <<= 8 * sizeof(size_t) - maxSzPos - 1;
+		}	
+	}
 }
 
 void rt_opencl_render( rt_render_pipe *pRp )
@@ -360,7 +420,6 @@ void rt_opencl_render( rt_render_pipe *pRp )
 	// enqueue threads
 	{
 		size_t gwSz[2] = { pRp->w, pRp->h };
-		size_t wgSz[2] = { 16, 8 };
 
 		clSetKernelArg( pOcl->raytrace, 0, 
 			sizeof(cl_mem), (void *) &mema );
@@ -388,7 +447,7 @@ void rt_opencl_render( rt_render_pipe *pRp )
 			sizeof(cl_mem), (void *) &memout );
 
 		clEnqueueNDRangeKernel( pOcl->commQue, pOcl->raytrace, 2, 
-			NULL, gwSz, wgSz, 0, NULL, NULL );	
+			NULL, gwSz, pOcl->workGroupSz, 0, NULL, NULL );	
 	}
 	
 	clEnqueueReadBuffer( pOcl->commQue, memout, CL_TRUE, 0, 

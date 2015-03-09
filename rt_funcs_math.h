@@ -94,4 +94,6 @@ inline rt_float minF( rt_float a, rt_float b );
 
 inline rt_float maxF( rt_float a, rt_float b );
 
+inline int is_power_of_two_size_t( size_t a );
+
 #endif

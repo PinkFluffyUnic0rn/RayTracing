@@ -11,9 +11,6 @@
 #define VERTEX_IN_BLOCK           1048576
 #define MATERIALS_IN_BLOCK        128
 
-#define RT_CL_RAYTRACE_PATH       "./Build/Release/CL/rt_raytrace.cl"
-#define RT_CL_RAYTRACE_ARGS       "-I /home/qwerty/RayTracing"
-
 #define SAH_PARTS                 30
 #define MAX_PRIMS_IN_NODE         7
 #define MAX_DEPTH                 6
@@ -92,7 +89,10 @@ typedef struct _rt_argb
 
 typedef struct _rt_color
 {
-	rt_float b, g, r, a;
+	float b;
+	float g;
+	float r;
+	float a;
 } rt_color;
 
 typedef struct _rt_material
@@ -102,6 +102,7 @@ typedef struct _rt_material
 	rt_color diffuse;
 	rt_color specular;
 	rt_color reflect;
+	rt_float lightFalloff;
 	rt_float optDens;
 } rt_material;
 
@@ -221,6 +222,7 @@ typedef struct _rt_opencl_content
 	cl_device_id devID[5][5];
 	cl_uint devCount[5];
 	cl_uint computeUnitsCount;
+	size_t workGroupSz[2];
 	cl_context context;
 	cl_command_queue commQue;
 	cl_program prog;

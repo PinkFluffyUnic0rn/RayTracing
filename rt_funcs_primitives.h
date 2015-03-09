@@ -15,7 +15,8 @@ void rt_plane_create( rt_plane *pPl, rt_vector3 *pP,
 	rt_vector3 *pN, unsigned long int mat );
 
 void rt_material_create( rt_material *pM, rt_color *pC, rt_color *pA,
-	rt_color *pD, rt_color *pS, rt_color *pR, rt_float oD );
+	rt_color *pD, rt_color *pS, rt_color *pR, 
+	rt_float rFoff, rt_float oD );
 
 void rt_point_light_create( rt_point_light *pS, 
 	rt_vector3 *pP, rt_float r, rt_color *pCol );
