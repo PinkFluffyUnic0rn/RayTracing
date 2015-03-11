@@ -104,12 +104,13 @@ inline void rt_get_nearest_in_last( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 				*minV = v;
 				
 				*prN = primsOffset;
-				*nearestB = 1;
+				*nearestB = b;
 			}
 		}
 	}
 
 }
+
 /*
 inline void rt_get_nearest_triangle( rt_cl_render_pipe_data *pRp, rt_ray *pR, 
 	float *minT, float *minU, float *minV,
@@ -168,26 +169,43 @@ inline void rt_get_nearest_triangle( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 		{
 			rt_get_nearest_in_last( pRp, pR, currentNode, minT, minU, minV,
 				prN, nearestB );
-			
+		
 			if ( *nearestB )
 				return;
-	
+		
 			if ( stackPos )
 			{
-				currentNode = stack[--stackPos];
-				tFar = stackFar[stackPos];
+				--stackPos;
+				currentNode = stack[stackPos];
+				tFar = stackFar[stackPos];	
 			}
 			else
 				return;
 		}
 		else
 		{
-			rt_aparallel_ray_plane_intersection( pR, 
-				pRp->kdtreeNodesBuf[currentNode].axis, 
-				pRp->kdtreeNodesBuf[currentNode].sep, &tSplit );
-	
+			float sep = pRp->kdtreeNodesBuf[currentNode].sep;	
+		
+
+			switch ( pRp->kdtreeNodesBuf[currentNode].axis )
+			{
+			case RT_AXIS_X:
+				tSplit = (sep - pR->src.x) * pR->invDest.x;
+				break;
+
+			case RT_AXIS_Y:
+				tSplit = (sep - pR->src.y) * pR->invDest.y;
+				break;
+
+			case RT_AXIS_Z:
+				tSplit = (sep - pR->src.z) * pR->invDest.z;
+				break;
+			}
+
+
 			nearNode = pRp->kdtreeNodesBuf[currentNode].leftNode;
 			farNode = pRp->kdtreeNodesBuf[currentNode].rightNode;
+
 
 			switch ( pRp->kdtreeNodesBuf[currentNode].axis )
 			{
@@ -226,14 +244,16 @@ inline void rt_get_nearest_triangle( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 			else
 			{
 				stack[stackPos] = farNode;
-				stackFar[stackPos++] = tFar;
-				
+				stackFar[stackPos] = tFar;
+				++stackPos;
+
 				currentNode = nearNode;
 				tFar = tSplit;
 			}
 		}
 	}
 }
+
 
 inline void rt_add_alpha_in_last( rt_cl_render_pipe_data *pRp, rt_ray *pR, 
 	ulong nodeIdx, float d, float *alpha)
@@ -287,7 +307,8 @@ inline void rt_get_alpha_triangles( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 			
 			if ( stackPos )
 			{
-				currentNode = stack[--stackPos];
+				--stackPos;
+				currentNode = stack[stackPos];
 				tFar = stackFar[stackPos];
 			}
 			else
@@ -339,8 +360,9 @@ inline void rt_get_alpha_triangles( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 			else
 			{
 				stack[stackPos] = farNode;
-				stackFar[stackPos++] = tFar;
-				
+				stackFar[stackPos] = tFar;
+				++stackPos;
+
 				currentNode = nearNode;
 				tFar = tSplit;
 			}
@@ -523,6 +545,24 @@ inline void rt_light_point( rt_cl_render_pipe_data *pRp, rt_vector3 *pV,
 		}
 }
 
+/*
+inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp, 
+	rt_ray *pR, int depth )
+{
+	float trMinT, trMinU, trMinV;
+	ulong trN;
+	int trNearestB = 0;
+
+	rt_color col = pRp->fillCol;
+
+	rt_get_nearest_triangle( pRp, pR, &trMinT, &trMinU, &trMinV,
+		&trN, &trNearestB ); 
+	if ( trNearestB != 0 )
+		col = pRp->materialBuf[pRp->trianglesBuf[trN].mat].color;
+
+	return col;
+}*/
+
 inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp, 
 	rt_ray *pR, int depth )
 {
@@ -638,7 +678,6 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 				col[parentIdx].g += col[i].g * primRef.g;
 				col[parentIdx].b += col[i].b * primRef.b;
 
-				rt_color_clamp( col + parentIdx, col + parentIdx );
 			}
 		}
 		else
@@ -660,15 +699,17 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 					* -dist );
 			}
 
-			col[parentIdx].r = col[parentIdx].r * alpha
+			col[parentIdx].r += //col[parentIdx].r * alpha
 				+ col[i].r * refr;
-			col[parentIdx].g = col[parentIdx].g * alpha
+			col[parentIdx].g += //col[parentIdx].g * alpha
 				+ col[i].g * refr;
-			col[parentIdx].b = col[parentIdx].b * alpha
+			col[parentIdx].b += //col[parentIdx].b * alpha
 				+ col[i].b * refr;
 		}
+				
+		rt_color_clamp( col + parentIdx, col + parentIdx );
 	}
-
+	
 	return col[0];
 }
 

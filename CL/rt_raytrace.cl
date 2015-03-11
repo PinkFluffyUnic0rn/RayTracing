@@ -45,7 +45,7 @@ __kernel void raytrace( __constant rt_cl_raytrace_args *a,
 		
 	pRpData.w = a->w;
 	pRpData.h = a->h;
-
+	
 	for ( i = 0; i < a->ydelta; ++i )
 		for ( j = 0; j < a->xdelta; ++j )
 		{

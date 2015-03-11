@@ -133,7 +133,7 @@ void rt_render_pipe_add_triangles( rt_render_pipe *pRp,
 
 	if ( (pRp->vertexCount + vCount) >= VERTEX_IN_BLOCK )
 		exit( -2 );	
-
+	
 	clEnqueueWriteBuffer( pRp->oclContent.commQue, pRp->memv, 
 		CL_TRUE, sizeof(rt_verticle)*(pRp->vertexCount), 
 		sizeof(rt_verticle) * vCount, pV, 0, NULL, NULL );
@@ -281,10 +281,10 @@ void rt_init_opencl( rt_render_pipe *pRp )
 
 	strcpy( clArgs, "-I " );
 	strcat( clArgs, rt_cl_include_path );
-
+	
 	ret = clBuildProgram( ocl->prog, 1, (ocl->devID)[0],
 		clArgs, NULL, NULL );
-
+//printf( "%d\n", ret );
 	if ( ret != CL_SUCCESS )
 	{
 	    	size_t log_size;
@@ -854,22 +854,20 @@ void rt_kdtree_build( rt_render_pipe *pRp )
 		CL_TRUE, CL_MAP_WRITE, 0, sizeof(rt_verticle) 
 		* (pRp->vertexCount), 0, NULL, NULL, NULL );
 
-	for ( i = 0; i < pRp->trianglesCount; ++i )
+	for ( i = 0; i < pRp->vertexCount; ++i )
 	{
-		minP.x = (minP.x > (memVer + memTr[i].pV0)->pos.x || i == 0) ? 
-			(memVer + memTr[i].pV0)->pos.x : minP.x;
-		minP.y = (minP.y > (memVer + memTr[i].pV1)->pos.y || i == 0) ? 
-			(memVer + memTr[i].pV1)->pos.y : minP.y;		
-		minP.z = (minP.z > (memVer + memTr[i].pV2)->pos.z || i == 0) ? 
-			(memVer + memTr[i].pV2)->pos.z : minP.z;
+		minP.x = (minP.x > memVer[i].pos.x || i == 0) ? memVer[i].pos.x : minP.x;
+		minP.y = (minP.y > memVer[i].pos.y || i == 0) ? memVer[i].pos.y : minP.y;
+		minP.z = (minP.z > memVer[i].pos.z || i == 0) ? memVer[i].pos.z : minP.z;
+	
 
-		maxP.x = (maxP.x < (memVer + memTr[i].pV0)->pos.x || i == 0) ? 
-			(memVer + memTr[i].pV0)->pos.x : maxP.x;
-		maxP.y = (maxP.y < (memVer + memTr[i].pV1)->pos.y || i == 0) ? 
-			(memVer + memTr[i].pV1)->pos.y : maxP.y;		
-		maxP.z = (maxP.z < (memVer + memTr[i].pV2)->pos.z || i == 0) ? 
-			(memVer + memTr[i].pV2)->pos.z : maxP.z;	
+		maxP.x = (maxP.x < memVer[i].pos.x || i == 0) ? memVer[i].pos.x : maxP.x;
+		maxP.y = (maxP.y < memVer[i].pos.y || i == 0) ? memVer[i].pos.y : maxP.y;
+		maxP.z = (maxP.z < memVer[i].pos.z || i == 0) ? memVer[i].pos.z : maxP.z;
 	}
+
+	minP.x -= 1.0f; minP.y -= 1.0f; minP.z -= 1.0f;
+	maxP.x += 1.0f; maxP.y += 1.0f; maxP.z += 1.0f;
 
 	rt_vector3_add( &maxP, &minP, &(pRp->boundingBox.center) );
 	rt_vector3_scalar_mult( &(pRp->boundingBox.center), 0.5f, 
@@ -926,9 +924,17 @@ void rt_kdtree_build( rt_render_pipe *pRp )
 			sizeof(rt_ulong) * primsInNodesCount, 
 			0, NULL, NULL, NULL );
 
+		/*
+		rt_dout_kdtree( memVer, memTr, pRp, rootNode, 0 );
+		exit(1);
+		*/
+		
 		rt_kdtree_pack_to_buffer( memNode, 
 			memTrIdx, rootNode, 0, 0 );
-
+/*	
+		rt_cl_dout_kdtree( memVer, memTr, memNode, memTrIdx, pRp, 0, 0 );
+		exit(1);
+*/
 		clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memn, 
 			memNode, 0, NULL, NULL );
 	 	clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memi, 

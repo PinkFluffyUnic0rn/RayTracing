@@ -17,6 +17,8 @@
 #define SPHERE_COUNT           10
 #define POINT_LIGHTS_COUNT     1
 #define SQUARES_COUNT_SQRT     50
+#define BOTTOM                 0
+
 #define MATERIAL_COUNT         2 + SPHERE_COUNT
 
 #define RENDER_TO_PNGS         0
@@ -43,8 +45,8 @@ guint rotTID;
 rt_render_pipe renderPipe;
 
 rt_sphere sp[SPHERE_COUNT];
-rt_triangle tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2];
-rt_verticle vx[(SQUARES_COUNT_SQRT+1)*(SQUARES_COUNT_SQRT+1)];
+rt_triangle tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 2];
+rt_verticle vx[(SQUARES_COUNT_SQRT+1)*(SQUARES_COUNT_SQRT+1) + 4];
 rt_point_light lt[POINT_LIGHTS_COUNT];
 rt_float koef[SPHERE_COUNT];
 rt_material mt[MATERIAL_COUNT];
@@ -54,6 +56,8 @@ rt_plane pl;
 rt_float t = 0.0f;
 int w, h;
 
+rt_float plSz = 150.0f;
+rt_float plHt = 20.0f;
 double avr = 0.0f;
 int frm = 0;
 unsigned long int pngN = 0;
@@ -273,15 +277,13 @@ void buildPlaneOfTriangles()
 	rt_color_create( col, 0.5f, 0.223f, 0.345f, 0.474f );   //color
 	rt_color_create( col+1, 0.0f, 1.0f, 1.0f, 1.0f );       //ambient
 	rt_color_create( col+2, 0.0f, 0.75f, 0.75f, 0.75f );    //diffuse
-	rt_color_create( col+3, 3.5f, 0.25f, 0.25f, 0.25f );       //specular
-	rt_color_create( col+4, 0.0f, 0.2f, 0.2f, 0.2f );       //reflect
+	rt_color_create( col+3, 3.5f, 0.25f, 0.25f, 0.25f );    //specular
+	rt_color_create( col+4, 0.0f, 0.3f, 0.3f, 0.3f );       //reflect
 	rt_material_create( mt, col, col+1, col+2, 
 		col+3, col+4, 0.005, 1.33f );
 		
 	#pragma GCC diagnostic ignored "-Wdiv-by-zero"
 	rt_vector3 e1, e2;
-	rt_float plSz = 150.0f;
-	rt_float plHt = 20.0f;
 	rt_float dt = plSz/SQUARES_COUNT_SQRT;
 	rt_float xPos = -plSz*0.5f, zPos = 50.0f-plSz*0.5f;
 	int pointsInRow = SQUARES_COUNT_SQRT+1;
@@ -377,6 +379,11 @@ void draw( GtkWidget *wgt, cairo_t *cr, gpointer ud )
 	buildPlaneOfTriangles();
 
 
+	for ( i = 0; i < MATERIAL_COUNT; ++i ) 
+		rt_render_pipe_add_material( &renderPipe, mt+i, i );
+
+
+
 	//add light to render pipe
 	for ( i = 0; i < POINT_LIGHTS_COUNT; ++i )
 	{
@@ -414,8 +421,8 @@ void draw( GtkWidget *wgt, cairo_t *cr, gpointer ud )
 
 	//add triangles
 	rt_render_pipe_add_triangles( &renderPipe, vx, tr,
-		(SQUARES_COUNT_SQRT+1)*(SQUARES_COUNT_SQRT+1),
-		SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 );
+		(SQUARES_COUNT_SQRT+1)*(SQUARES_COUNT_SQRT+1) + (BOTTOM ? 4 : 0),
+		SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + (BOTTOM ? 2 : 0) );
 
 	//draw to buffer
 	renderedImage = rt_render_pipe_draw( &renderPipe );
@@ -478,10 +485,6 @@ int main( int argc, char *argv[] )
 	}
 
 	//initialize render pipe and create objects to draw
-
-	//create a plane of triangles
-	if ( SQUARES_COUNT_SQRT > 0 )
-		buildPlaneOfTriangles();
 		
 	//create fisrt sphere
 	if ( SPHERE_COUNT > 0 )
@@ -555,8 +558,50 @@ int main( int argc, char *argv[] )
 	renderPipe.cam->camPos.y = 18.0f;          
 	renderPipe.cam->camPos.z = 43.0f;          
 
-	for ( i = 0; i < MATERIAL_COUNT; ++i ) 
-		rt_render_pipe_add_material( &renderPipe, mt+i, i );
+	{
+		rt_ulong vertexOffset = SQUARES_COUNT_SQRT ? (SQUARES_COUNT_SQRT+1)*(SQUARES_COUNT_SQRT+1) : 0;
+		float bottomHeight = 25.0f;
+	
+		rt_color_create( col, 1.0f, 1.0f, 1.0f, 1.0f );     //color
+		rt_color_create( col+1, 0.0f, 0.0f, 0.0f, 0.0f );   //ambient
+		rt_color_create( col+2, 0.0f, 1.0f, 1.0f, 1.0f );   //diffuse
+		rt_color_create( col+3, 5.0f, 1.0f, 1.0f, 1.0f );   //specular
+		rt_color_create( col+4, 0.0f, 0.0f, 0.0f, 0.0f );   //reflect
+		rt_material_create( mt + SPHERE_COUNT + 1, col, col+1, col+2, 
+			col+3, col+4, 0.0, 1.0f );
+	
+		rt_vector3_create( &(vx[vertexOffset].pos),
+			plSz*0.5f, plHt + bottomHeight, plSz*0.5f+50.0f );
+		rt_vector3_create( &(vx[vertexOffset + 1].pos),
+			plSz*0.5f, plHt + bottomHeight, -plSz*0.5f+50.0f );
+		rt_vector3_create( &(vx[vertexOffset + 2].pos),
+			-plSz*0.5f, plHt + bottomHeight, plSz*0.5f+50.0f ); 
+		rt_vector3_create( &(vx[vertexOffset + 3].pos),
+			-plSz*0.5f, plHt + bottomHeight, -plSz*0.5f+50.0f );
+	
+	
+		rt_vector3_create( &(vx[vertexOffset].norm),
+			0.0f, -1.0f, 0.0f );
+		rt_vector3_create( &(vx[vertexOffset + 1].norm),
+			0.0f, -1.0f, 0.0f );
+		rt_vector3_create( &(vx[vertexOffset + 2].norm),
+			0.0f, -1.0f, 0.0f ); 
+		rt_vector3_create( &(vx[vertexOffset + 3].norm),
+			0.0f, -1.0f, 0.0f );
+
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2].pV0 = vertexOffset;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2].pV1 = vertexOffset + 1;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2].pV2 = vertexOffset + 2;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2].mat = SPHERE_COUNT + 1;
+
+
+
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 1].pV0 = vertexOffset + 3;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 1].pV1 = vertexOffset + 1;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 1].pV2 = vertexOffset + 2;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 1].mat = SPHERE_COUNT + 1;
+
+	}
 
 	//set timeout for render
 	rotTID = g_timeout_add( (guint)1, rotStep, NULL );

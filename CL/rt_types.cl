@@ -1,9 +1,9 @@
 #ifndef RT_TYPES_CL
 #define RT_TYPES_CL
 
-#define RAY_TREE_DEPTH        1//3
-#define NODES_COUNT           1//7
-#define LIM_NEW_RAYS          0//3
+#define RAY_TREE_DEPTH        3
+#define NODES_COUNT           7
+#define LIM_NEW_RAYS          3
 
 #define EPSILON               0.005f              
 
