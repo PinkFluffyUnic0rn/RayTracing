@@ -170,13 +170,14 @@ inline void rt_get_nearest_triangle( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 			rt_get_nearest_in_last( pRp, pR, currentNode, minT, minU, minV,
 				prN, nearestB );
 		
-			if ( *nearestB )
+			if ( *nearestB && (*minT < tFar) )
 				return;
 		
 			if ( stackPos )
 			{
 				--stackPos;
 				currentNode = stack[stackPos];
+				tNear = tFar;
 				tFar = stackFar[stackPos];	
 			}
 			else
@@ -250,16 +251,17 @@ inline void rt_get_nearest_triangle( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 				currentNode = nearNode;
 				tFar = tSplit;
 			}
+			
 		}
 	}
+
 }
 
 
 inline void rt_add_alpha_in_last( rt_cl_render_pipe_data *pRp, rt_ray *pR, 
-	ulong nodeIdx, float d, float *alpha)
+	ulong nodeIdx, float d, float tFar, float *alpha)
 {
 	ulong i;
-	ulong intrsC = 0;
 	ulong sz = pRp->kdtreeNodesBuf[nodeIdx].primsCount;
 
 	for ( i = 0; i < sz; ++i )
@@ -274,13 +276,13 @@ inline void rt_add_alpha_in_last( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 		b = rt_ray_triangle_intersection( pRp, pR, &tmpT, &t, &u, &v );
 	
 
-		if ( b && t < d )
+		if ( b && (t < d) && (t < tFar) )
 		{
+			
 			*alpha += pRp->materialBuf[pRp->trianglesBuf[primsOffset].mat].color.a;
 
 		}
 	}
-
 }
 
 inline void rt_get_alpha_triangles( rt_cl_render_pipe_data *pRp, rt_ray *pR, 
@@ -303,12 +305,17 @@ inline void rt_get_alpha_triangles( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 	{
 		if ( pRp->kdtreeNodesBuf[currentNode].isLast )
 		{
-			rt_add_alpha_in_last( pRp, pR, currentNode, d, alpha );
+			rt_add_alpha_in_last( pRp, pR, currentNode, d, tFar, alpha );
+
+// same primitive can be placed into several nodes,
+// need to check this probability, when summing alphas
+// shadows for triangles disabled in "rt_light_point" function
 			
 			if ( stackPos )
 			{
 				--stackPos;
 				currentNode = stack[stackPos];
+				tNear = tFar;
 				tFar = stackFar[stackPos];
 			}
 			else
@@ -316,9 +323,22 @@ inline void rt_get_alpha_triangles( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 		}
 		else
 		{
-			rt_aparallel_ray_plane_intersection( pR, 
-				pRp->kdtreeNodesBuf[currentNode].axis, 
-				pRp->kdtreeNodesBuf[currentNode].sep, &tSplit );
+			float sep = pRp->kdtreeNodesBuf[currentNode].sep;	
+			
+			switch ( pRp->kdtreeNodesBuf[currentNode].axis )
+			{
+			case RT_AXIS_X:
+				tSplit = (sep - pR->src.x) * pR->invDest.x;
+				break;
+
+			case RT_AXIS_Y:
+				tSplit = (sep - pR->src.y) * pR->invDest.y;
+				break;
+
+			case RT_AXIS_Z:
+				tSplit = (sep - pR->src.z) * pR->invDest.z;
+				break;
+			}
 	
 			nearNode = pRp->kdtreeNodesBuf[currentNode].leftNode;
 			farNode = pRp->kdtreeNodesBuf[currentNode].rightNode;
@@ -486,9 +506,9 @@ inline void rt_light_point( rt_cl_render_pipe_data *pRp, rt_vector3 *pV,
 				
 				shadowed = rt_clamp_float(a, 0.0f, 1.0f);
 
-				rt_get_alpha_triangles( pRp, &shadowRay, d, &a ); 
+//				rt_get_alpha_triangles( pRp, &shadowRay, d, &a ); 
 
-				shadowed += rt_clamp_float(a, 0.0f, 1.0f);
+//				shadowed += rt_clamp_float(a, 0.0f, 1.0f);
 				shadowed *= pMat->color.a;
 			}
 
@@ -544,7 +564,6 @@ inline void rt_light_point( rt_cl_render_pipe_data *pRp, rt_vector3 *pV,
 			rt_color_add( &tmpCol, pCol, pCol );
 		}
 }
-
 /*
 inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp, 
 	rt_ray *pR, int depth )
@@ -561,7 +580,8 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 		col = pRp->materialBuf[pRp->trianglesBuf[trN].mat].color;
 
 	return col;
-}*/
+}
+*/
 
 inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp, 
 	rt_ray *pR, int depth )
@@ -623,7 +643,7 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 			rt_get_point_from_ray( pRp, rays + i, prNearestB, prN, 
 				prMinT, p + i, n + i );
 		}
-
+		
 		if ( i >= LIM_NEW_RAYS )
 		{
 			rt_material tmpMat = pRp->materialBuf[pPrMat[i]];
@@ -699,12 +719,9 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 					* -dist );
 			}
 
-			col[parentIdx].r += //col[parentIdx].r * alpha
-				+ col[i].r * refr;
-			col[parentIdx].g += //col[parentIdx].g * alpha
-				+ col[i].g * refr;
-			col[parentIdx].b += //col[parentIdx].b * alpha
-				+ col[i].b * refr;
+			col[parentIdx].r += col[i].r * refr;
+			col[parentIdx].g += col[i].g * refr;
+			col[parentIdx].b += col[i].b * refr;
 		}
 				
 		rt_color_clamp( col + parentIdx, col + parentIdx );

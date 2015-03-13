@@ -5,7 +5,7 @@
 #define NODES_COUNT           7
 #define LIM_NEW_RAYS          3
 
-#define EPSILON               0.005f              
+#define EPSILON               0.05f              
 
 #define ENV_OPT_DENSITY       1.0f
 

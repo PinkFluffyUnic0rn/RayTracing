@@ -17,7 +17,7 @@
 #define SPHERE_COUNT           10
 #define POINT_LIGHTS_COUNT     1
 #define SQUARES_COUNT_SQRT     50
-#define BOTTOM                 0
+#define BOTTOM                 1
 
 #define MATERIAL_COUNT         2 + SPHERE_COUNT
 
@@ -45,8 +45,8 @@ guint rotTID;
 rt_render_pipe renderPipe;
 
 rt_sphere sp[SPHERE_COUNT];
-rt_triangle tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 2];
-rt_verticle vx[(SQUARES_COUNT_SQRT+1)*(SQUARES_COUNT_SQRT+1) + 4];
+rt_triangle tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 10];
+rt_verticle vx[(SQUARES_COUNT_SQRT+1)*(SQUARES_COUNT_SQRT+1) + 20];
 rt_point_light lt[POINT_LIGHTS_COUNT];
 rt_float koef[SPHERE_COUNT];
 rt_material mt[MATERIAL_COUNT];
@@ -275,10 +275,10 @@ void buildPlaneOfTriangles()
 	int i, j, k;
 
 	rt_color_create( col, 0.5f, 0.223f, 0.345f, 0.474f );   //color
-	rt_color_create( col+1, 0.0f, 1.0f, 1.0f, 1.0f );       //ambient
-	rt_color_create( col+2, 0.0f, 0.75f, 0.75f, 0.75f );    //diffuse
-	rt_color_create( col+3, 3.5f, 0.25f, 0.25f, 0.25f );    //specular
-	rt_color_create( col+4, 0.0f, 0.3f, 0.3f, 0.3f );       //reflect
+	rt_color_create( col+1, 0.0f, 1.0f, 1.0f, 1.0f );        //ambient
+	rt_color_create( col+2, 0.0f, 0.5f, 0.5f, 0.5f );        //diffuse
+	rt_color_create( col+3, 3.5f, 0.25f, 0.25f, 0.25f );     //specular
+	rt_color_create( col+4, 0.0f, 0.3f, 0.3f, 0.3f );        //reflect
 	rt_material_create( mt, col, col+1, col+2, 
 		col+3, col+4, 0.005, 1.33f );
 		
@@ -376,7 +376,8 @@ void draw( GtkWidget *wgt, cairo_t *cr, gpointer ud )
 	p = curTime.tv_sec*1000000000LL + curTime.tv_nsec;
 	s = curTime.tv_sec;
 
-	buildPlaneOfTriangles();
+	if ( SQUARES_COUNT_SQRT )
+		buildPlaneOfTriangles();
 
 
 	for ( i = 0; i < MATERIAL_COUNT; ++i ) 
@@ -421,8 +422,8 @@ void draw( GtkWidget *wgt, cairo_t *cr, gpointer ud )
 
 	//add triangles
 	rt_render_pipe_add_triangles( &renderPipe, vx, tr,
-		(SQUARES_COUNT_SQRT+1)*(SQUARES_COUNT_SQRT+1) + (BOTTOM ? 4 : 0),
-		SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + (BOTTOM ? 2 : 0) );
+		(SQUARES_COUNT_SQRT+1)*(SQUARES_COUNT_SQRT+1) + (BOTTOM ? 20 : 0),
+		SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + (BOTTOM ? 10 : 0) );
 
 	//draw to buffer
 	renderedImage = rt_render_pipe_draw( &renderPipe );
@@ -459,6 +460,8 @@ void draw( GtkWidget *wgt, cairo_t *cr, gpointer ud )
 int main( int argc, char *argv[] )
 {
 	int i;	
+	time_t initialTime = time(0);
+
 	rt_camera frust;
 	rt_vector3 v[4];
 	rt_color col[5];
@@ -550,17 +553,19 @@ int main( int argc, char *argv[] )
 	renderPipe.cam->world._34 = 0.0f;          
 		                                   
 	renderPipe.cam->world._41 = 0.0f;          
-	renderPipe.cam->world._42 = -18.0f;        
+	renderPipe.cam->world._42 = -12.0f;        
 	renderPipe.cam->world._43 = -43.0f;        
 	renderPipe.cam->world._44 = 1.0f;          
                                                    
 	renderPipe.cam->camPos.x = 0.0f;           
-	renderPipe.cam->camPos.y = 18.0f;          
+	renderPipe.cam->camPos.y = 12.0f;          
 	renderPipe.cam->camPos.z = 43.0f;          
 
 	{
-		rt_ulong vertexOffset = SQUARES_COUNT_SQRT ? (SQUARES_COUNT_SQRT+1)*(SQUARES_COUNT_SQRT+1) : 0;
+		rt_ulong vertexOffset = SQUARES_COUNT_SQRT 
+			? (SQUARES_COUNT_SQRT+1)*(SQUARES_COUNT_SQRT+1) : 0;
 		float bottomHeight = 25.0f;
+		float topHeight = 3.0f;
 	
 		rt_color_create( col, 1.0f, 1.0f, 1.0f, 1.0f );     //color
 		rt_color_create( col+1, 0.0f, 0.0f, 0.0f, 0.0f );   //ambient
@@ -571,15 +576,14 @@ int main( int argc, char *argv[] )
 			col+3, col+4, 0.0, 1.0f );
 	
 		rt_vector3_create( &(vx[vertexOffset].pos),
-			plSz*0.5f, plHt + bottomHeight, plSz*0.5f+50.0f );
+			plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f );
 		rt_vector3_create( &(vx[vertexOffset + 1].pos),
-			plSz*0.5f, plHt + bottomHeight, -plSz*0.5f+50.0f );
+			plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
 		rt_vector3_create( &(vx[vertexOffset + 2].pos),
-			-plSz*0.5f, plHt + bottomHeight, plSz*0.5f+50.0f ); 
+			-plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f ); 
 		rt_vector3_create( &(vx[vertexOffset + 3].pos),
-			-plSz*0.5f, plHt + bottomHeight, -plSz*0.5f+50.0f );
-	
-	
+			-plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
+
 		rt_vector3_create( &(vx[vertexOffset].norm),
 			0.0f, -1.0f, 0.0f );
 		rt_vector3_create( &(vx[vertexOffset + 1].norm),
@@ -594,12 +598,130 @@ int main( int argc, char *argv[] )
 		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2].pV2 = vertexOffset + 2;
 		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2].mat = SPHERE_COUNT + 1;
 
-
-
 		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 1].pV0 = vertexOffset + 3;
 		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 1].pV1 = vertexOffset + 1;
 		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 1].pV2 = vertexOffset + 2;
 		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 1].mat = SPHERE_COUNT + 1;
+
+
+
+
+
+		rt_vector3_create( &(vx[vertexOffset + 4].pos),
+			-plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f );
+		rt_vector3_create( &(vx[vertexOffset + 5].pos),
+			-plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
+		rt_vector3_create( &(vx[vertexOffset + 6].pos),
+			-plSz*0.5f, plHt - topHeight, plSz*0.5f+50.0f ); 
+		rt_vector3_create( &(vx[vertexOffset + 7].pos),
+			-plSz*0.5f, plHt - topHeight, -plSz*0.5f+50.0f );
+
+		rt_vector3_create( &(vx[vertexOffset + 4].norm),
+			1.0f, 0.0f, 0.0f );
+		rt_vector3_create( &(vx[vertexOffset + 5].norm),
+			1.0f, 0.0f, 0.0f );
+		rt_vector3_create( &(vx[vertexOffset + 6].norm),
+			1.0f, 0.0f, 0.0f ); 
+		rt_vector3_create( &(vx[vertexOffset + 7].norm),
+			1.0f, 0.0f, 0.0f );
+
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 2].pV0 = vertexOffset + 4;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 2].pV1 = vertexOffset + 5;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 2].pV2 = vertexOffset + 6;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 2].mat = SPHERE_COUNT + 1;
+
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 3].pV0 = vertexOffset + 7;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 3].pV1 = vertexOffset + 6;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 3].pV2 = vertexOffset + 5;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 3].mat = SPHERE_COUNT + 1;
+
+
+
+		rt_vector3_create( &(vx[vertexOffset + 8].pos),
+			plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f );
+		rt_vector3_create( &(vx[vertexOffset + 9].pos),
+			plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
+		rt_vector3_create( &(vx[vertexOffset + 10].pos),
+			plSz*0.5f, plHt - topHeight, plSz*0.5f+50.0f ); 
+		rt_vector3_create( &(vx[vertexOffset + 11].pos),
+			plSz*0.5f, plHt - topHeight, -plSz*0.5f+50.0f );
+
+		rt_vector3_create( &(vx[vertexOffset + 8].norm),
+			-1.0f, 0.0f, 0.0f );
+		rt_vector3_create( &(vx[vertexOffset + 9].norm),
+			-1.0f, 0.0f, 0.0f );
+		rt_vector3_create( &(vx[vertexOffset + 10].norm),
+			-1.0f, 0.0f, 0.0f ); 
+		rt_vector3_create( &(vx[vertexOffset + 11].norm),
+			-1.0f, 0.0f, 0.0f );
+
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 4].pV0 = vertexOffset + 8;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 4].pV1 = vertexOffset + 9;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 4].pV2 = vertexOffset + 10;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 4].mat = SPHERE_COUNT + 1;
+
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 5].pV0 = vertexOffset + 11;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 5].pV1 = vertexOffset + 10;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 5].pV2 = vertexOffset + 9;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 5].mat = SPHERE_COUNT + 1;
+
+
+		rt_vector3_create( &(vx[vertexOffset + 12].pos),
+			-plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f );
+		rt_vector3_create( &(vx[vertexOffset + 13].pos),
+			plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f );
+		rt_vector3_create( &(vx[vertexOffset + 14].pos),
+			-plSz*0.5f, plHt - topHeight, plSz*0.5f+50.0f ); 
+		rt_vector3_create( &(vx[vertexOffset + 15].pos),
+			plSz*0.5f, plHt - topHeight, plSz*0.5f+50.0f );
+
+		rt_vector3_create( &(vx[vertexOffset + 12].norm),
+			0.0f, 0.0f, -1.0f );
+		rt_vector3_create( &(vx[vertexOffset + 13].norm),
+			0.0f, 0.0f, -1.0f );
+		rt_vector3_create( &(vx[vertexOffset + 14].norm),
+			0.0f, 0.0f, -1.0f ); 
+		rt_vector3_create( &(vx[vertexOffset + 15].norm),
+			0.0f, 0.0f, -1.0f );
+
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 6].pV0 = vertexOffset + 12;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 6].pV1 = vertexOffset + 13;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 6].pV2 = vertexOffset + 14;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 6].mat = SPHERE_COUNT + 1;
+
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 7].pV0 = vertexOffset + 15;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 7].pV1 = vertexOffset + 14;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 7].pV2 = vertexOffset + 13;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 7].mat = SPHERE_COUNT + 1;
+
+
+		rt_vector3_create( &(vx[vertexOffset + 16].pos),
+			-plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
+		rt_vector3_create( &(vx[vertexOffset + 17].pos),
+			plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
+		rt_vector3_create( &(vx[vertexOffset + 18].pos),
+			-plSz*0.5f, plHt - topHeight, -plSz*0.5f+50.0f ); 
+		rt_vector3_create( &(vx[vertexOffset + 19].pos),
+			plSz*0.5f, plHt - topHeight, -plSz*0.5f+50.0f );
+
+		rt_vector3_create( &(vx[vertexOffset + 16].norm),
+			0.0f, 0.0f, 1.0f );
+		rt_vector3_create( &(vx[vertexOffset + 17].norm),
+			0.0f, 0.0f, 1.0f );
+		rt_vector3_create( &(vx[vertexOffset + 18].norm),
+			0.0f, 0.0f, 1.0f ); 
+		rt_vector3_create( &(vx[vertexOffset + 19].norm),
+			0.0f, 0.0f, 1.0f );
+
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 8].pV0 = vertexOffset + 16;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 8].pV1 = vertexOffset + 17;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 8].pV2 = vertexOffset + 18;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 8].mat = SPHERE_COUNT + 1;
+
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 9].pV0 = vertexOffset + 19;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 9].pV1 = vertexOffset + 18;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 9].pV2 = vertexOffset + 17;
+		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 9].mat = SPHERE_COUNT + 1;
 
 	}
 
@@ -631,6 +753,12 @@ int main( int argc, char *argv[] )
 	gtk_widget_show_all(mainWindow);
 	gtk_window_resize( GTK_WINDOW(mainWindow), WIDTH, HEIGHT );
 	gtk_main();
+
+	initialTime = time(0) - initialTime;
+	printf( "total rendering time: %ldh, %ldm, %lds\n", 
+		initialTime / 3600,
+		(initialTime % 3600) / 60,
+		(initialTime % 60) );
 
 	rt_cleanup( &renderPipe );
 

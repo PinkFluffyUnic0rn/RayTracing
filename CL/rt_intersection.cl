@@ -89,15 +89,7 @@ inline int rt_ray_plane_intersection( rt_ray *pRay, rt_plane *pPlane, float *t )
 
 inline void rt_aparallel_ray_plane_intersection( rt_ray *pRay, RT_AXIS axis, 
 	float pos, float *t )
-{/*
-	if ( axis == RT_AXIS_X )
-		*t = (pos - pRay->src.x) * pRay->invDest.x;
-	else if ( axis == RT_AXIS_Y )
-		*t = (pos - pRay->src.y) * pRay->invDest.y;
-	else
-		*t = (pos - pRay->src.z) * pRay->invDest.z;
-		*/
-
+{
 	switch ( axis )
 	{
 	case RT_AXIS_X:
@@ -112,7 +104,6 @@ inline void rt_aparallel_ray_plane_intersection( rt_ray *pRay, RT_AXIS axis,
 		*t = (pos - pRay->src.z) * pRay->invDest.z;
 		break;
 	}
-
 }
 
 //baricentic test
@@ -208,52 +199,6 @@ int rt_box_ray_intersection( rt_box *pC, rt_ray *pR, float *tNear, float *tFar )
 }
 
 /*
-int rt_cube_ray_is_intersects( rt_cube *pC, rt_ray *pR )
-{
-	// 2D example, almost same for 3D
-	//                        y
-	//                   |    |    /--- t1
-	//                   |    |   /| 
-	//  -----------------|----|--/-|-------------------
-	//		     |	  | /| |
-	//                   |    |/ | |
-	//		     |	  | t4 |
-	//  _________________|___/|____|___________________ x
-	//		     |	/ |    | 
-	//  -----------------|-/--|----|-------------------
-	//                   |/|  |    |
-	//	      t2 ----/ |  |    |
-	//                   | t3 |    |
-
-	// invDest is precomputed
-	// if r.dest == ( x, y, z ), then 
-	// then r.invDest == ( 1/x, 1/y, 1/z )
-
-	// x slab intersection
-	float t1 = ( pC->center.x - pC->extents - pR->src.x ) * pR->invDest.x;
-	float t2 = ( pC->center.x + pC->extents - pR->src.x ) * pR->invDest.x;
-
-	// y slab intersection
-	float t3 = ( pC->center.y - pC->extents - pR->src.y ) * pR->invDest.y;
-	float t4 = ( pC->center.y + pC->extents - pR->src.y ) * pR->invDest.y;
-	
-	// z slab intersection
-	float t5 = ( pC->center.z - pC->extents - pR->src.z ) * pR->invDest.z;
-	float t6 = ( pC->center.z + pC->extents - pR->src.z ) * pR->invDest.z;
-
-	// test
-	float tmin = maxF( maxF(minF(t1, t2), minF(t3, t4)), minF(t5, t6) );
-	float tmax = minF( minF(maxF(t1, t2), maxF(t3, t4)), maxF(t5, t6) );
-
-	if ( tmax < 0 )
-		return 0;
-
-	if ( tmin > tmax )
-		return 0;
-
-	return 1;
-}
-
 int rt_cube_sphere_is_intersects( rt_cube *pC, rt_sphere *pS )
 {
 	float rSqr = (pS->rad) * (pS->rad);
@@ -284,11 +229,6 @@ int rt_cube_sphere_is_intersects( rt_cube *pC, rt_sphere *pS )
 
 
 	return rSqr > 0.0f;
-}
-
-int rt_cube_plane_is_intersects( rt_cube *pC, rt_plane *pS )
-{
-	return 0;
 }
 
 inline int vecprojintersects( rt_vector3 *cp, rt_vector3 *tp, rt_vector3 *v )
