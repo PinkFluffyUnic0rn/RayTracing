@@ -715,7 +715,7 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 			{
 				dist = length( p[parentIdx] - p[i] );
 				refr *= exp( pRp->materialBuf[
-					pPrMat[parentIdx]].lightFalloff 
+					pPrMat[parentIdx]].lightFalloff
 					* -dist );
 			}
 

@@ -14,6 +14,7 @@ void rt_init( char *path )
 
 	strncpy( rt_cl_include_path, path, tmpP );
 	strncpy( rt_cl_raytrace_kernel_path, path, tmpP );
+	
 	strcat( rt_cl_raytrace_kernel_path, "/CL/rt_raytrace.cl" );
 }
 
@@ -218,11 +219,12 @@ void rt_init_opencl( rt_render_pipe *pRp )
 	int i;
 	cl_int ret;
 		
-	//printf( "***: %s\n", rt_cl_raytrace_kernel_path );
 	size_t progsrcsz;
-	FILE *fp = fopen( rt_cl_raytrace_kernel_path, "r" );
-	char *progsrc = (char *) malloc(0x10000000);
+	FILE *fp;
+	char *progsrc;
 	
+	char *clArgs = malloc( sizeof(char) 
+		* ( strlen(rt_cl_include_path) + 4) );
 
 	if ( pRp == NULL )
 		exit( -1 );
@@ -256,7 +258,11 @@ void rt_init_opencl( rt_render_pipe *pRp )
 		NULL, &ret );
 	ocl->commQue = clCreateCommandQueue( ocl->context, 
 		(ocl->devID)[0][0], 0, &ret );
-		
+
+	
+	fp = fopen( rt_cl_raytrace_kernel_path, "r" );
+	progsrc = (char *) malloc(0x10000000);
+
 	if ( fp == NULL )
 	{
 		printf( "open file error\n" );
@@ -276,15 +282,13 @@ void rt_init_opencl( rt_render_pipe *pRp )
 		exit( -3 );
 	}
 
-	char *clArgs = malloc( sizeof(char) 
-		* ( strlen(rt_cl_include_path) + 4) );
 
 	strcpy( clArgs, "-I " );
 	strcat( clArgs, rt_cl_include_path );
 	
 	ret = clBuildProgram( ocl->prog, 1, (ocl->devID)[0],
 		clArgs, NULL, NULL );
-//printf( "%d\n", ret );
+
 	if ( ret != CL_SUCCESS )
 	{
 	    	size_t log_size;
@@ -513,14 +517,16 @@ void rt_kdtree_compute_sah( rt_ulong *memTp, rt_triangle *memTr,
 		rt_ulong tmpPrimsCountL = 0;
 		rt_ulong tmpPrimsCountR = 0;
 	
-		for ( i = 0; i < primsCount; ++i )
-		{
-			float maxV, minV;
-			rt_triangle *tmpTr = memTr + memTp[i];
 
-			switch ( axis )
+
+		switch ( axis )
+		{
+		case RT_AXIS_X:
+			for ( i = 0; i < primsCount; ++i )
 			{
-			case RT_AXIS_X:
+				float maxV, minV;
+				rt_triangle *tmpTr = memTr + memTp[i];
+
 				maxV = memVer[tmpTr->pV0].pos.x;	
 				if ( maxV < memVer[tmpTr->pV1].pos.x )
 					maxV = memVer[tmpTr->pV1].pos.x;
@@ -532,9 +538,20 @@ void rt_kdtree_compute_sah( rt_ulong *memTp, rt_triangle *memTr,
 					minV = memVer[tmpTr->pV1].pos.x;
 				if ( minV > memVer[tmpTr->pV2].pos.x )
 					minV = memVer[tmpTr->pV2].pos.x;
-				break;
 
-			case RT_AXIS_Y:
+				if ( minV < min )
+					++tmpPrimsCountL;
+				if ( maxV > min )
+					++tmpPrimsCountR;
+			}
+			break;
+
+		case RT_AXIS_Y:
+			for ( i = 0; i < primsCount; ++i )
+			{
+				float maxV, minV;
+				rt_triangle *tmpTr = memTr + memTp[i];
+			
 				maxV = memVer[tmpTr->pV0].pos.y;	
 				if ( maxV < memVer[tmpTr->pV1].pos.y )
 					maxV = memVer[tmpTr->pV1].pos.y;
@@ -546,9 +563,20 @@ void rt_kdtree_compute_sah( rt_ulong *memTp, rt_triangle *memTr,
 					minV = memVer[tmpTr->pV1].pos.y;
 				if ( minV > memVer[tmpTr->pV2].pos.y )
 					minV = memVer[tmpTr->pV2].pos.y;
-				break;
-			
-			case RT_AXIS_Z:
+	
+				if ( minV < min )
+					++tmpPrimsCountL;
+				if ( maxV > min )
+					++tmpPrimsCountR;
+			}
+			break;
+
+		case RT_AXIS_Z:
+			for ( i = 0; i < primsCount; ++i )
+			{
+				float maxV, minV;
+				rt_triangle *tmpTr = memTr + memTp[i];
+
 				maxV = memVer[tmpTr->pV0].pos.z;	
 				if ( maxV < memVer[tmpTr->pV1].pos.z )
 					maxV = memVer[tmpTr->pV1].pos.z;
@@ -560,16 +588,13 @@ void rt_kdtree_compute_sah( rt_ulong *memTp, rt_triangle *memTr,
 					minV = memVer[tmpTr->pV1].pos.z;
 				if ( minV > memVer[tmpTr->pV2].pos.z )
 					minV = memVer[tmpTr->pV2].pos.z;
-
-				break;
+					
+				if ( minV < min )
+					++tmpPrimsCountL;
+				if ( maxV > min )
+					++tmpPrimsCountR;
 			}
-
-
-			if ( minV < min )
-				++tmpPrimsCountL;
-			if ( maxV > min )
-				++tmpPrimsCountR;
-			
+			break;
 		}
 		
 		switch ( axis )
@@ -677,6 +702,7 @@ rt_kdtree_count_info rt_kdtree_make_childs( rt_verticle *memVer, rt_triangle *me
 	rt_ulong i, j, k;
 	rt_box tmpBoxL, tmpBoxR;
 	
+	// cheking conditions for end of recursion
 	if ( pNode->primsCount <= MAX_PRIMS_IN_NODE 
 		|| depth == MAX_DEPTH )
 	{
@@ -695,6 +721,7 @@ rt_kdtree_count_info rt_kdtree_make_childs( rt_verticle *memVer, rt_triangle *me
 		pNode->isLast = 0;
 
 	
+	// choosing axis for separation
 	pNode->axis = RT_AXIS_X;
 
 	if ( range < bbox->extents.y )
@@ -709,6 +736,7 @@ rt_kdtree_count_info rt_kdtree_make_childs( rt_verticle *memVer, rt_triangle *me
 		pNode->axis = RT_AXIS_Z;
 	}	
 
+	// computing SAH
 	pNode->leftNode = malloc( sizeof(rt_kdtree_node) );
 	pNode->rightNode = malloc( sizeof(rt_kdtree_node) );
 	
@@ -719,6 +747,7 @@ rt_kdtree_count_info rt_kdtree_make_childs( rt_verticle *memVer, rt_triangle *me
 	pNode->leftNode->prims = malloc( sizeof(rt_ulong) * pNode->leftNode->primsCount );
 	pNode->rightNode->prims = malloc( sizeof(rt_ulong) * pNode->rightNode->primsCount );
 
+	// place prims into node
 	j = k = 0;
 
 	for ( i = 0; i < pNode->primsCount; ++i )
@@ -781,6 +810,7 @@ rt_kdtree_count_info rt_kdtree_make_childs( rt_verticle *memVer, rt_triangle *me
 	
 	free( pNode->prims );
 
+	// making bounding box for child nodes
 	tmpBoxR = tmpBoxL = *bbox;
 
 	switch ( pNode->axis )
@@ -822,6 +852,7 @@ rt_kdtree_count_info rt_kdtree_make_childs( rt_verticle *memVer, rt_triangle *me
 		break;
 	}
 	
+	// recursive call
 	{
 		rt_kdtree_count_info tmpCntI, cntL, cntR;
 
@@ -847,6 +878,8 @@ void rt_kdtree_build( rt_render_pipe *pRp )
 	rt_ulong nodesCount;
 	rt_kdtree_node *rootNode = malloc( sizeof(rt_kdtree_node) );
 
+
+	// mapping vertex and triangles into host memory
 	memTr = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->memt, 
 		CL_TRUE, CL_MAP_WRITE, 0, sizeof(rt_triangle) 
 		* (pRp->trianglesCount), 0, NULL, NULL, NULL );
@@ -854,6 +887,7 @@ void rt_kdtree_build( rt_render_pipe *pRp )
 		CL_TRUE, CL_MAP_WRITE, 0, sizeof(rt_verticle) 
 		* (pRp->vertexCount), 0, NULL, NULL, NULL );
 
+	// making bounding box
 	for ( i = 0; i < pRp->vertexCount; ++i )
 	{
 		minP.x = (minP.x > memVer[i].pos.x || i == 0) ? memVer[i].pos.x : minP.x;
@@ -877,7 +911,7 @@ void rt_kdtree_build( rt_render_pipe *pRp )
 	rt_vector3_scalar_mult( &(pRp->boundingBox.extents), 0.5f, 
 		&(pRp->boundingBox.extents) );
 
-
+	// creating nodes
 	rootNode->prims = malloc( sizeof(rt_triangle) * pRp->trianglesCount );	
 	rootNode->primsCount = pRp->trianglesCount;
 	
@@ -904,6 +938,13 @@ void rt_kdtree_build( rt_render_pipe *pRp )
 		nodesCount = tmpCntI.nodesCount;
 	}
 
+	// unmapping
+	clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memv, memVer, 0, 
+		NULL, NULL );
+	clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memt, memTr, 0, 
+		NULL, NULL );
+
+	// packing nodes into OpenCL buffers 
 	{
 		rt_cl_kdtree_node *memNode;
 		rt_ulong *memTrIdx;
@@ -941,10 +982,6 @@ void rt_kdtree_build( rt_render_pipe *pRp )
 			memTrIdx, 0, NULL, NULL );
 	}
 
-	clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memv, memVer, 0, 
-		NULL, NULL );
-	clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memt, memTr, 0, 
-		NULL, NULL );
 }
 
 

@@ -16,7 +16,7 @@
 
 #define SPHERE_COUNT           10
 #define POINT_LIGHTS_COUNT     1
-#define SQUARES_COUNT_SQRT     50
+#define SQUARES_COUNT_SQRT     150
 #define BOTTOM                 1
 
 #define MATERIAL_COUNT         2 + SPHERE_COUNT
@@ -31,7 +31,8 @@ typedef struct _wave
 {
 	float period;
 	float amplitude;
-	rt_vector3 dir;
+	float angle;
+	float speed;
 } wave;
 
 GtkWidget *mainWindow;
@@ -269,26 +270,47 @@ void resizeImage()
 void buildPlaneOfTriangles()
 {
 	rt_vector3 v[4];
-
 	rt_color col[5];
+	wave wv[7];
+	int wavesCount = 10;
 
 	int i, j, k;
+	int pointsInRow = SQUARES_COUNT_SQRT+1;
 
 	rt_color_create( col, 0.5f, 0.223f, 0.345f, 0.474f );   //color
-	rt_color_create( col+1, 0.0f, 1.0f, 1.0f, 1.0f );        //ambient
-	rt_color_create( col+2, 0.0f, 0.5f, 0.5f, 0.5f );        //diffuse
-	rt_color_create( col+3, 3.5f, 0.25f, 0.25f, 0.25f );     //specular
-	rt_color_create( col+4, 0.0f, 0.3f, 0.3f, 0.3f );        //reflect
+	rt_color_create( col+1, 0.0f, 1.0f, 1.0f, 1.0f );       //ambient
+	rt_color_create( col+2, 0.0f, 0.5f, 0.5f, 0.5f );       //diffuse
+	rt_color_create( col+3, 3.5f, 0.25f, 0.25f, 0.25f );    //specular
+	rt_color_create( col+4, 0.0f, 0.3f, 0.3f, 0.3f );       //reflect
 	rt_material_create( mt, col, col+1, col+2, 
-		col+3, col+4, 0.005, 1.33f );
+		col+3, col+4, 0.05, 1.33f );
 		
 	#pragma GCC diagnostic ignored "-Wdiv-by-zero"
 	rt_vector3 e1, e2;
 	rt_float dt = plSz/SQUARES_COUNT_SQRT;
 	rt_float xPos = -plSz*0.5f, zPos = 50.0f-plSz*0.5f;
-	int pointsInRow = SQUARES_COUNT_SQRT+1;
 	#pragma GCC diagnostic push
 
+	wv[0].period = 100.0f; wv[0].amplitude = 1.5f;
+	wv[0].angle = M_PI*0.5f; wv[0].speed = 500.0f;
+
+	wv[1].period = 79.16677f; wv[1].amplitude = 0.25f;
+	wv[1].angle = 2.9428474f; wv[1].speed = 256.9786f;
+
+	wv[2].period = 144.04169f; wv[2].amplitude = 0.25f;
+	wv[2].angle = -1.8729727f; wv[2].speed = 160.6270f;
+
+	wv[3].period = 79.15634f; wv[3].amplitude = 0.25f;
+	wv[3].angle = 1.8583484f; wv[3].speed = 239.9041f;
+
+	wv[4].period = 121.51403f; wv[4].amplitude = 0.5f;
+	wv[4].angle = -1.5343947f; wv[4].speed = 230.2120f;
+
+	wv[5].period = 72.40281f; wv[5].amplitude = 0.5f;
+	wv[5].angle = 1.4335813f; wv[5].speed = 300.9681f;
+
+	wv[6].period = 81.57271f; wv[6].amplitude = 0.5f;
+	wv[6].angle = -1.2057098f; wv[6].speed = 280.5781f;
 
 	//create vertex
 	for ( i = 0; i < pointsInRow; ++i )
@@ -296,11 +318,15 @@ void buildPlaneOfTriangles()
 		{
 			float u = ((float) i) / pointsInRow;
 			float v = ((float) j) / pointsInRow;
-			float y = plHt
-				+ sin(100.0 * u + t*0.0f) * 0.5f
-				+ cos(25.0 * v + t*125.0f) * 2.0f
-				+ cos(50.0 * v + t*250.0f) * 1.0f
-				+ cos(200.0 * v + t*500.0f) * 0.5f;
+	
+			float y = plHt;
+
+			for ( k = 0; k < wavesCount; ++k )
+			{
+				y += sin(wv[k].period 
+					* (-cos(wv[k].angle)*u+sin(wv[k].angle)*v) 
+					+ t*wv[k].speed) * wv[k].amplitude;
+			}
 
 			rt_vector3_create( 
 				&(vx[i*pointsInRow+j].pos),

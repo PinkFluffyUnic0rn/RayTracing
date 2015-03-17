@@ -82,3 +82,4 @@ __kernel void raytrace( __constant rt_cl_raytrace_args *a,
 		}
 
 }
+
