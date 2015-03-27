@@ -22,6 +22,7 @@
 #define MATERIAL_COUNT         2 + SPHERE_COUNT
 
 #define RENDER_TO_PNGS         0
+#define RENDER_TO_SCREEN       1
 #define PNGS_PATH              "pngs/"
 
 #define WIDTH                  1280
@@ -453,13 +454,16 @@ void draw( GtkWidget *wgt, cairo_t *cr, gpointer ud )
 
 	//draw to buffer
 	renderedImage = rt_render_pipe_draw( &renderPipe );
-
-	//draw buffer to screen
 	memcpy( data, renderedImage, sizeof(rt_argb) * WIDTH * HEIGHT );
-	cairo_set_source_surface(cr, csur, 0, 0 );
-	cairo_paint(cr);
+	
+	//draw buffer to screen
+	if ( RENDER_TO_SCREEN )
+	{
+		cairo_set_source_surface(cr, csur, 0, 0 );
+		cairo_paint(cr);
+	}
 
-	//render to files
+	//draw to files
 	if ( RENDER_TO_PNGS )
 	{
 		char tmp[255];
@@ -757,6 +761,7 @@ int main( int argc, char *argv[] )
 	//create main window
 	gtk_init( &argc, &argv );
 
+	
 	mainWindow = gtk_window_new( GTK_WINDOW_TOPLEVEL );
 
 	drawArea = gtk_drawing_area_new();
@@ -775,9 +780,10 @@ int main( int argc, char *argv[] )
 		G_CALLBACK(keyPress), NULL );
 	g_signal_connect( mainWindow, "destroy",
 		G_CALLBACK(windowDestroy), NULL );
-
+	
 	gtk_widget_show_all(mainWindow);
 	gtk_window_resize( GTK_WINDOW(mainWindow), WIDTH, HEIGHT );
+
 	gtk_main();
 
 	initialTime = time(0) - initialTime;

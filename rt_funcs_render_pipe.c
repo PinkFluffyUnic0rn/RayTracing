@@ -480,15 +480,194 @@ void rt_cleanup( rt_render_pipe *pRp )
 	clReleaseMemObject( pRp->memm );
 }
 
+void *rt_compute_sah_help_thread( void *pArgs )
+{
+	rt_compute_sah_help_args *args = (rt_compute_sah_help_args *)pArgs;
+	rt_compute_sah_help_return *rets = malloc(sizeof(rt_compute_sah_help_return));
+	int end = SAH_PARTS / COMPUTE_SAH_THREADS * args->threadId + SAH_PARTS / COMPUTE_SAH_THREADS;	
+	int i;
+	int b = 1;
+	float extents_xy_area = args->pBox->extents.x * args->pBox->extents.y,
+		extents_yz_area = args->pBox->extents.y * args->pBox->extents.z,
+		extents_xz_area = args->pBox->extents.x * args->pBox->extents.z;
+
+	rt_verticle *memVer = args->memVer;
+
+	switch ( args->axis )
+	{
+	case RT_AXIS_X:	
+		for ( i = SAH_PARTS / COMPUTE_SAH_THREADS * args->threadId; i < end; ++i )
+		{
+			float sep = args->min + i * args->delta;
+			float sah;
+			int j;
+			rt_ulong tmpPrimsCountL = 0;
+			rt_ulong tmpPrimsCountR = 0;
+		
+			for ( j = 0; j < args->primsCount; ++j )
+			{		
+				float maxV, minV;
+				rt_triangle *tmpTr = args->memTr + (args->memTp)[j];
+
+				maxV = memVer[tmpTr->pV0].pos.x;	
+				if ( maxV < memVer[tmpTr->pV1].pos.x )
+					maxV = memVer[tmpTr->pV1].pos.x;
+				if ( maxV < memVer[tmpTr->pV2].pos.x )
+					maxV = memVer[tmpTr->pV2].pos.x;
+
+				minV = memVer[tmpTr->pV0].pos.x;
+				if ( minV > memVer[tmpTr->pV1].pos.x )
+					minV = memVer[tmpTr->pV1].pos.x;
+				if ( minV > memVer[tmpTr->pV2].pos.x )
+					minV = memVer[tmpTr->pV2].pos.x;
+
+				if ( minV < sep )
+					++tmpPrimsCountL;
+				if ( maxV > sep )
+					++tmpPrimsCountR;
+			}
+
+			sah = ( extents_yz_area
+				+ (sep - args->pBox->center.x + args->pBox->extents.x)
+				* (args->pBox->extents.y + args->pBox->extents.z) )
+				* tmpPrimsCountL
+				+ 
+				( extents_yz_area
+				+ (args->pBox->center.x + args->pBox->extents.x - sep)
+				* (args->pBox->extents.y + args->pBox->extents.z) )
+				* tmpPrimsCountR;
+
+			
+			if ( b || sah < rets->resSAH )
+			{
+				rets->resSAH = sah;
+				rets->resSep = sep;
+				rets->resPrimsL = tmpPrimsCountL;
+				rets->resPrimsR = tmpPrimsCountR;
+				b = 0;
+			}
+		}
+		break;
+	
+	case RT_AXIS_Y:
+		for ( i = SAH_PARTS / COMPUTE_SAH_THREADS * args->threadId; i < end; ++i )
+		{		
+			float sep = args->min + i * args->delta;
+			float sah;
+			int j;
+			rt_ulong tmpPrimsCountL = 0;
+			rt_ulong tmpPrimsCountR = 0;
+			
+			for ( j = 0; j < args->primsCount; ++j )
+			{
+				float maxV, minV;
+				rt_triangle *tmpTr = args->memTr + (args->memTp)[j];
+
+				maxV = memVer[tmpTr->pV0].pos.y;	
+				if ( maxV < memVer[tmpTr->pV1].pos.y )
+					maxV = memVer[tmpTr->pV1].pos.y;
+				if ( maxV < memVer[tmpTr->pV2].pos.y )
+					maxV = memVer[tmpTr->pV2].pos.y;
+
+				minV = memVer[tmpTr->pV0].pos.y;
+				if ( minV > memVer[tmpTr->pV1].pos.y )
+					minV = memVer[tmpTr->pV1].pos.y;
+				if ( minV > memVer[tmpTr->pV2].pos.y )
+					minV = memVer[tmpTr->pV2].pos.y;
+	
+				if ( minV < sep )
+					++tmpPrimsCountL;
+				if ( maxV > sep )
+					++tmpPrimsCountR;
+			}
+
+			sah = ( extents_xz_area
+				+ (sep - args->pBox->center.y + args->pBox->extents.y)
+				* (args->pBox->extents.x + args->pBox->extents.z) )
+				* tmpPrimsCountL
+				+ 
+				( extents_xz_area
+				+ (args->pBox->center.y + args->pBox->extents.y - sep)
+				* (args->pBox->extents.x + args->pBox->extents.z) )
+				* tmpPrimsCountR;
+					
+			if ( b || sah < rets->resSAH )
+			{
+				rets->resSAH = sah;
+				rets->resSep = sep;
+				rets->resPrimsL = tmpPrimsCountL;
+				rets->resPrimsR = tmpPrimsCountR;
+				b = 0;
+			}
+		}
+		break;
+
+	case RT_AXIS_Z:
+		for ( i = SAH_PARTS / COMPUTE_SAH_THREADS * args->threadId; i < end; ++i )
+		{
+			float sep = args->min + i * args->delta;
+			float sah;
+			int j;
+			rt_ulong tmpPrimsCountL = 0;
+			rt_ulong tmpPrimsCountR = 0;
+
+			for ( j = 0; j < args->primsCount; ++j )
+			{
+				float maxV, minV;
+				rt_triangle *tmpTr = args->memTr + (args->memTp)[j];
+
+				maxV = memVer[tmpTr->pV0].pos.z;	
+				if ( maxV < memVer[tmpTr->pV1].pos.z )
+					maxV = memVer[tmpTr->pV1].pos.z;
+				if ( maxV < memVer[tmpTr->pV2].pos.z )
+					maxV = memVer[tmpTr->pV2].pos.z;
+
+				minV = memVer[tmpTr->pV0].pos.z;
+				if ( minV > memVer[tmpTr->pV1].pos.z )
+					minV = memVer[tmpTr->pV1].pos.z;
+				if ( minV > memVer[tmpTr->pV2].pos.z )
+					minV = memVer[tmpTr->pV2].pos.z;
+			
+				if ( minV < sep )
+					++tmpPrimsCountL;
+				if ( maxV > sep )
+					++tmpPrimsCountR;
+			}
+
+			sah = ( extents_xy_area
+				+ (sep - args->pBox->center.z + args->pBox->extents.z)
+				* (args->pBox->extents.x + args->pBox->extents.y) )
+				* tmpPrimsCountL
+				+ 
+				( extents_xy_area
+				+ (args->pBox->center.z + args->pBox->extents.z - sep)
+				* (args->pBox->extents.x + args->pBox->extents.y) )
+				* tmpPrimsCountR;
+						
+			if ( b || sah < rets->resSAH )
+			{
+				rets->resSAH = sah;
+				rets->resSep = sep;
+				rets->resPrimsL = tmpPrimsCountL;
+				rets->resPrimsR = tmpPrimsCountR;
+				b = 0;
+			}
+
+		}
+		break;
+	}
+
+	return rets;
+}
+
 void rt_kdtree_compute_sah( rt_ulong *memTp, rt_triangle *memTr, 
 	rt_verticle *memVer, rt_ulong primsCount, RT_AXIS axis, 
 	rt_box *pBox, rt_ulong *primsCountL, rt_ulong *primsCountR, 
-	float *sep )
+	float *pSep )
 {
-	float minSAH;
 	float min, max;
 	float delta;
-	int b = 1;
+	int i;
 	
 	switch ( axis )
 	{
@@ -509,136 +688,59 @@ void rt_kdtree_compute_sah( rt_ulong *memTp, rt_triangle *memTr,
 	}
 
 	delta = (max - min) / (float) SAH_PARTS;
-	
-	for ( ; min < max; min += delta )
+
 	{
-		float sah;
-		int i;
-		rt_ulong tmpPrimsCountL = 0;
-		rt_ulong tmpPrimsCountR = 0;
-	
+		pthread_t *thrs = (pthread_t *) malloc( sizeof(pthread_t) * COMPUTE_SAH_THREADS );
+		rt_compute_sah_help_args *prms = (rt_compute_sah_help_args *) malloc( 
+			sizeof(rt_compute_sah_help_args) * COMPUTE_SAH_THREADS );
+		rt_compute_sah_help_return **rets = (rt_compute_sah_help_return **) malloc( 
+			sizeof(rt_compute_sah_help_return *) * COMPUTE_SAH_THREADS );
+		float minSAH;
+		int minID;
 
 
-		switch ( axis )
+		for ( i = 0; i < COMPUTE_SAH_THREADS; ++i ) 
 		{
-		case RT_AXIS_X:
-			for ( i = 0; i < primsCount; ++i )
-			{
-				float maxV, minV;
-				rt_triangle *tmpTr = memTr + memTp[i];
-
-				maxV = memVer[tmpTr->pV0].pos.x;	
-				if ( maxV < memVer[tmpTr->pV1].pos.x )
-					maxV = memVer[tmpTr->pV1].pos.x;
-				if ( maxV < memVer[tmpTr->pV2].pos.x )
-					maxV = memVer[tmpTr->pV2].pos.x;
-
-				minV = memVer[tmpTr->pV0].pos.x;
-				if ( minV > memVer[tmpTr->pV1].pos.x )
-					minV = memVer[tmpTr->pV1].pos.x;
-				if ( minV > memVer[tmpTr->pV2].pos.x )
-					minV = memVer[tmpTr->pV2].pos.x;
-
-				if ( minV < min )
-					++tmpPrimsCountL;
-				if ( maxV > min )
-					++tmpPrimsCountR;
-			}
-			break;
-
-		case RT_AXIS_Y:
-			for ( i = 0; i < primsCount; ++i )
-			{
-				float maxV, minV;
-				rt_triangle *tmpTr = memTr + memTp[i];
-			
-				maxV = memVer[tmpTr->pV0].pos.y;	
-				if ( maxV < memVer[tmpTr->pV1].pos.y )
-					maxV = memVer[tmpTr->pV1].pos.y;
-				if ( maxV < memVer[tmpTr->pV2].pos.y )
-					maxV = memVer[tmpTr->pV2].pos.y;
-
-				minV = memVer[tmpTr->pV0].pos.y;
-				if ( minV > memVer[tmpTr->pV1].pos.y )
-					minV = memVer[tmpTr->pV1].pos.y;
-				if ( minV > memVer[tmpTr->pV2].pos.y )
-					minV = memVer[tmpTr->pV2].pos.y;
-	
-				if ( minV < min )
-					++tmpPrimsCountL;
-				if ( maxV > min )
-					++tmpPrimsCountR;
-			}
-			break;
-
-		case RT_AXIS_Z:
-			for ( i = 0; i < primsCount; ++i )
-			{
-				float maxV, minV;
-				rt_triangle *tmpTr = memTr + memTp[i];
-
-				maxV = memVer[tmpTr->pV0].pos.z;	
-				if ( maxV < memVer[tmpTr->pV1].pos.z )
-					maxV = memVer[tmpTr->pV1].pos.z;
-				if ( maxV < memVer[tmpTr->pV2].pos.z )
-					maxV = memVer[tmpTr->pV2].pos.z;
-
-				minV = memVer[tmpTr->pV0].pos.z;
-				if ( minV > memVer[tmpTr->pV1].pos.z )
-					minV = memVer[tmpTr->pV1].pos.z;
-				if ( minV > memVer[tmpTr->pV2].pos.z )
-					minV = memVer[tmpTr->pV2].pos.z;
-					
-				if ( minV < min )
-					++tmpPrimsCountL;
-				if ( maxV > min )
-					++tmpPrimsCountR;
-			}
-			break;
-		}
+			prms[i].pBox = pBox;
+			prms[i].memTp = memTp;
+			prms[i].memTr = memTr;
+			prms[i].memVer = memVer;
+			prms[i].primsCount = primsCount;
+			prms[i].min = min;
+			prms[i].delta = delta;
+			prms[i].threadId = i;
+			prms[i].axis = axis;
 		
-		switch ( axis )
-		{
-		case RT_AXIS_X:
-			sah = (pBox->extents.y + pBox->extents.z
-				+ min - pBox->center.x + pBox->extents.x)
-				* tmpPrimsCountL
-				+ 
-				(pBox->extents.y + pBox->extents.z
-				+ pBox->center.x + pBox->extents.x - min) 
-				* tmpPrimsCountR;
-			break;
-
-		case RT_AXIS_Y:
-			sah = (pBox->extents.z + pBox->extents.x
-				+ min - pBox->center.y + pBox->extents.y)
-				* tmpPrimsCountL
-				+ 
-				(pBox->extents.z + pBox->extents.x
-				+ pBox->center.y + pBox->extents.y - min) 
-				* tmpPrimsCountR;
-			break;
-		case RT_AXIS_Z:
-			sah = (pBox->extents.y + pBox->extents.x
-				+ min - pBox->center.z + pBox->extents.z)
-				* tmpPrimsCountL
-				+ 
-				(pBox->extents.y + pBox->extents.x
-				+ pBox->center.z + pBox->extents.z - min) 
-				* tmpPrimsCountR;
-			break;
+			pthread_create( thrs + i, NULL, &rt_compute_sah_help_thread, 
+				(void *)(prms + i) );
 		}
-
-		if ( sah < minSAH || b )
-		{
-			minSAH = sah;
-			*sep = min;
-			*primsCountL = tmpPrimsCountL;
-			*primsCountR = tmpPrimsCountR;
-		}
+	
+		for ( i = 0; i < COMPUTE_SAH_THREADS; ++i )
+			pthread_join( thrs[i], (void *)(rets + i) );
+	
+		minID = 0;
+		minSAH = rets[0]->resSAH;
+		for ( i = 0; i < COMPUTE_SAH_THREADS; ++i )
+			if ( rets[i]->resSAH < minSAH )
+			{
+				minID = i;
+				minSAH = rets[i]->resSAH;
+			}
 		
-		b = 0;
+		*primsCountL = rets[minID]->resPrimsL;
+		*primsCountR = rets[minID]->resPrimsR;
+		*pSep = rets[minID]->resSep;
+
+		free(thrs);
+		free(prms);
+
+		for ( i = 0; i < COMPUTE_SAH_THREADS; ++i )
+			free(rets[i]);
+		free(rets);
 	}
+
+//	printf( "%lu %lu %f\n", *primsCountL, *primsCountR, *pSep );
+//	exit(2);
 }
 
 //with destruction
@@ -870,22 +972,30 @@ rt_kdtree_count_info rt_kdtree_make_childs( rt_verticle *memVer, rt_triangle *me
 
 void rt_kdtree_build( rt_render_pipe *pRp )
 {
-	rt_triangle *memTr;
-	rt_verticle *memVer;
+	rt_triangle *memTr = malloc( sizeof(rt_triangle) * pRp->trianglesCount );
+	rt_verticle *memVer = malloc( sizeof(rt_verticle) * pRp->vertexCount );
 	rt_ulong i;
 	rt_vector3 minP, maxP;
 	rt_ulong primsInNodesCount;
 	rt_ulong nodesCount;
 	rt_kdtree_node *rootNode = malloc( sizeof(rt_kdtree_node) );
 
-
 	// mapping vertex and triangles into host memory
-	memTr = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->memt, 
+/*	memTr = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->memt, 
 		CL_TRUE, CL_MAP_WRITE, 0, sizeof(rt_triangle) 
 		* (pRp->trianglesCount), 0, NULL, NULL, NULL );
 	memVer = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->memv, 
 		CL_TRUE, CL_MAP_WRITE, 0, sizeof(rt_verticle) 
 		* (pRp->vertexCount), 0, NULL, NULL, NULL );
+*/
+	clEnqueueReadBuffer( pRp->oclContent.commQue, pRp->memt, CL_TRUE, 0, 
+		sizeof(rt_triangle) * pRp->trianglesCount, memTr, 
+		0, NULL, NULL );
+
+	clEnqueueReadBuffer( pRp->oclContent.commQue, pRp->memv, CL_TRUE, 0, 
+		sizeof(rt_verticle) * pRp->vertexCount, memVer, 
+		0, NULL, NULL );
+
 
 	// making bounding box
 	for ( i = 0; i < pRp->vertexCount; ++i )
@@ -938,11 +1048,17 @@ void rt_kdtree_build( rt_render_pipe *pRp )
 		nodesCount = tmpCntI.nodesCount;
 	}
 
+	free( memTr );
+	memTr = NULL;
+	free( memVer );
+	memVer = NULL;
+
 	// unmapping
-	clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memv, memVer, 0, 
+/*	clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memv, memVer, 0, 
 		NULL, NULL );
 	clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memt, memTr, 0, 
 		NULL, NULL );
+*/
 
 	// packing nodes into OpenCL buffers 
 	{

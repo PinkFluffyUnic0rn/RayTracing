@@ -11,7 +11,8 @@
 #define VERTEX_IN_BLOCK           1048576
 #define MATERIALS_IN_BLOCK        128
 
-#define SAH_PARTS                 30
+#define SAH_PARTS                 32
+#define COMPUTE_SAH_THREADS       8
 #define MAX_PRIMS_IN_NODE         7
 #define MAX_DEPTH                 6
 
@@ -160,6 +161,27 @@ typedef struct _rt_light_desc
 	RT_LIGHT_TYPE lt;
 	void *offset;
 } rt_light_desc;
+
+typedef struct _rt_compute_sah_help_args
+{
+	rt_box *pBox;
+	rt_ulong *memTp;
+	rt_triangle *memTr; 
+	rt_verticle *memVer;
+	rt_ulong primsCount;
+	float min;
+	float delta;
+	int threadId;
+	RT_AXIS axis;
+} rt_compute_sah_help_args;
+
+typedef struct _rt_compute_sah_help_return
+{
+	float resSep;
+	float resSAH;
+	rt_ulong resPrimsL;	
+	rt_ulong resPrimsR;
+} rt_compute_sah_help_return;
 
 typedef struct _rt_cl_raytrace_args
 {	
