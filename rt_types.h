@@ -54,11 +54,11 @@ typedef cl_float2 rt_vector2;
 typedef cl_float3 rt_vector3;
 typedef cl_float4 rt_vector4;
 
-typedef struct _rt_vecticle
+typedef struct _rt_vectex
 {
 	rt_vector3 pos;
 	rt_vector3 norm;
-} rt_verticle;
+} rt_vertex;
 
 typedef struct _rt_ray
 {
@@ -70,17 +70,7 @@ typedef struct _rt_ray
 typedef struct _rt_camera
 {
 	rt_matrix4 world;
-	rt_matrix4 worldInverse;
 	rt_matrix4 viewToPersp;
-	rt_matrix4 viewToPerspInvTr;
-	rt_matrix4 worldInvTr;
-
-	rt_matrix3 dcToSsc;
-	rt_vector3 camPos;
-	
-	rt_float farZ;
-	rt_float hView, wView;
-	rt_float aspect;
 } rt_camera;
 
 typedef struct _rt_argb
@@ -167,7 +157,7 @@ typedef struct _rt_compute_sah_help_args
 	rt_box *pBox;
 	rt_ulong *memTp;
 	rt_triangle *memTr; 
-	rt_verticle *memVer;
+	rt_vertex *memVer;
 	rt_ulong primsCount;
 	float min;
 	float delta;
@@ -245,6 +235,7 @@ typedef struct _rt_opencl_content
 	cl_uint devCount[5];
 	cl_uint computeUnitsCount;
 	size_t workGroupSz[2];
+	rt_box boundingBox;
 	cl_context context;
 	cl_command_queue commQue;
 	cl_program prog;
@@ -253,9 +244,13 @@ typedef struct _rt_opencl_content
 
 typedef struct _rt_render_pipe
 {	
-	rt_argb *screenData;
-
-	rt_camera *cam;
+	ulong prim_blocks;
+	ulong prim_decs_blocks;
+	ulong light_blocks;
+	ulong light_decs_blocks;
+	ulong triangle_blocks;
+	ulong vertex_blocks;
+	ulong material_blocks;
 
 	cl_mem memp;
 	cl_mem mempdecs;
@@ -278,10 +273,14 @@ typedef struct _rt_render_pipe
 	cl_mem memi;
 	cl_mem memn;
 
+	
+	rt_argb *screenData;
+
+	rt_camera *cam;
+
 	rt_opencl_content oclContent;
 
 	rt_box boundingBox;
-
 	rt_color fillCol;
 	int w;
 	int h;

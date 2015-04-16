@@ -21,10 +21,7 @@ void rt_material_create( rt_material *pM, rt_color *pC, rt_color *pA,
 void rt_point_light_create( rt_point_light *pS, 
 	rt_vector3 *pP, rt_float r, rt_color *pCol );
 
-void rt_camera_create( rt_camera *pC, int w, int h, rt_float hV, 
-	rt_float fZ );
-
-void rt_camera_set_screen_space_matrix( rt_camera *pC, rt_matrix3 *pM );
+void rt_camera_create( rt_camera *pC, rt_float asp, rt_float hV );
 
 void rt_camera_set_view_matrix( rt_camera *pC, rt_matrix4 *pM );
 

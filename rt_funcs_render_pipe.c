@@ -18,8 +18,7 @@ void rt_init( char *path )
 	strcat( rt_cl_raytrace_kernel_path, "/CL/rt_raytrace.cl" );
 }
 
-void rt_render_pipe_create( rt_render_pipe *pRp, int w, int h,
-	void *pSD )
+void rt_render_pipe_create( rt_render_pipe *pRp, int w, int h )
 {
 	if ( !pRp )
 		exit( -1 );
@@ -35,10 +34,34 @@ void rt_render_pipe_create( rt_render_pipe *pRp, int w, int h,
 
 }
 
+void rt_render_pipe_reset_blocks( rt_render_pipe *pRp )
+{
+	if ( pRp == NULL )
+		exit( -1 );
+
+	clReleaseMemObject( pRp->memp );	
+	clReleaseMemObject( pRp->mempdecs );
+	clReleaseMemObject( pRp->meml );	
+	clReleaseMemObject( pRp->memldecs );
+	clReleaseMemObject( pRp->memt );
+	clReleaseMemObject( pRp->memv );
+	clReleaseMemObject( pRp->memm );
+
+	rt_init_buffers( pRp );
+}
+
 void rt_init_buffers( rt_render_pipe *pRp )
 {
 	if ( pRp == NULL )
 		exit( -1 );
+
+	pRp->prim_blocks = 1;
+	pRp->prim_decs_blocks = 1;
+	pRp->light_blocks = 1;
+	pRp->light_decs_blocks = 1;
+	pRp->triangle_blocks = 1;
+	pRp->vertex_blocks = 1;
+	pRp->material_blocks = 1;
 
 	pRp->mempdecs = clCreateBuffer( pRp->oclContent.context, CL_MEM_READ_ONLY, 
 		sizeof(rt_cl_prim_desc) * PRIMS_IN_BLOCK, NULL, NULL );
@@ -50,7 +73,7 @@ void rt_init_buffers( rt_render_pipe *pRp )
 	pRp->memldecs = clCreateBuffer( pRp->oclContent.context, CL_MEM_READ_ONLY, 
 		sizeof(rt_cl_light_desc) * LIGHTS_IN_BLOCK, NULL, NULL );
 	pRp->meml = clCreateBuffer( pRp->oclContent.context, CL_MEM_READ_ONLY, 
-		PRIMS_BLOCK_SIZE, NULL, NULL );
+		LIGHTS_BLOCK_SIZE, NULL, NULL );
 	pRp->lightsEnd = 0;
 	pRp->lightsCount = 0;
 
@@ -59,7 +82,7 @@ void rt_init_buffers( rt_render_pipe *pRp )
 	pRp->trianglesCount = 0;	
 
 	pRp->memv = clCreateBuffer( pRp->oclContent.context, CL_MEM_READ_ONLY, 
-		sizeof(rt_verticle)*VERTEX_IN_BLOCK, NULL, NULL );
+		sizeof(rt_vertex)*VERTEX_IN_BLOCK, NULL, NULL );
 	pRp->vertexCount = 0;	
 
 	pRp->memm = clCreateBuffer( pRp->oclContent.context, CL_MEM_READ_ONLY, 
@@ -75,18 +98,40 @@ void rt_render_pipe_set_camera( rt_render_pipe *pRp,
 	memcpy( pRp->cam, pFr, sizeof(rt_camera) );
 }
 
+void rt_add_block( rt_render_pipe *pRp, size_t blockSize, size_t nededSize,
+	rt_ulong *curBlocksCount, cl_mem *buf )
+{
+	cl_mem tmp;
+	
+	rt_ulong newBlocksCount = nededSize / blockSize;
+	newBlocksCount = newBlocksCount ? newBlocksCount : 1;
+	
+	tmp = clCreateBuffer( pRp->oclContent.context, CL_MEM_READ_ONLY, 
+		blockSize * (*curBlocksCount + newBlocksCount), NULL, NULL );
+	
+	clEnqueueCopyBuffer( pRp->oclContent.commQue, *buf, tmp, 0, 0,
+		blockSize * *curBlocksCount, 0, NULL, 0 );
+
+	clReleaseMemObject( *buf );
+
+	*buf = tmp;	
+	*curBlocksCount += newBlocksCount;
+}
+
 void rt_render_pipe_add_primitive( rt_render_pipe *pRp, void *pPrim,
 	RT_PRIMITIVE_TYPE pt )
 {
 	rt_cl_prim_desc *pClPDecs;
 	void *memPtr;
-
+	
 	if ( (pRp == NULL) || (pPrim == NULL) )
 		exit( -1 );
 
-	if ( pRp->primsCount == PRIMS_IN_BLOCK )
-		exit( -2 );
-
+	if ( (pRp->primsCount + 1) > PRIMS_IN_BLOCK * pRp->prim_decs_blocks )
+		rt_add_block( pRp, sizeof(rt_cl_prim_desc) * PRIMS_IN_BLOCK,
+			 sizeof(rt_cl_prim_desc), &(pRp->prim_decs_blocks), 
+			 &(pRp->mempdecs) );
+		
 	pClPDecs = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->mempdecs, 
 		CL_TRUE, CL_MAP_WRITE, 
 		sizeof(rt_cl_prim_desc) * (pRp->primsCount), 
@@ -101,9 +146,11 @@ void rt_render_pipe_add_primitive( rt_render_pipe *pRp, void *pPrim,
 	switch( pt )
 	{
 	case RT_PT_SPHERE:
-		if ( (pRp->primsEnd + sizeof(rt_sphere)) >= PRIMS_BLOCK_SIZE )
-			exit( -2 );
-		
+		if ( (pRp->primsEnd + sizeof(rt_sphere)) 
+				>= PRIMS_BLOCK_SIZE * pRp->prim_blocks )
+			rt_add_block( pRp, PRIMS_BLOCK_SIZE, sizeof(rt_sphere), 
+				&(pRp->prim_blocks),  &(pRp->memp) );
+
 		memPtr = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->memp, CL_TRUE, 
 			CL_MAP_WRITE, pRp->primsEnd, sizeof(rt_sphere), 
 			0, NULL, NULL, NULL );
@@ -124,20 +171,26 @@ void rt_render_pipe_add_primitive( rt_render_pipe *pRp, void *pPrim,
 }
 
 void rt_render_pipe_add_triangles( rt_render_pipe *pRp, 
-	rt_verticle *pV, rt_triangle *pTr, int vCount, int tCount )
+	rt_vertex *pV, rt_triangle *pTr, rt_ulong vCount, rt_ulong tCount )
 {
 	if ( (pRp == NULL) || (pV == NULL) || (pTr == NULL) )
 		exit( -1 );
 	
-	if ( (pRp->trianglesCount + tCount) >= TRIANGLES_IN_BLOCK )
-		exit( -2 );
-
-	if ( (pRp->vertexCount + vCount) >= VERTEX_IN_BLOCK )
-		exit( -2 );	
+	if ( (pRp->trianglesCount + tCount)
+			>= TRIANGLES_IN_BLOCK * pRp->triangle_blocks )
+		rt_add_block( pRp, TRIANGLES_IN_BLOCK * sizeof(rt_triangle), 
+			sizeof(rt_triangle) * tCount,  &(pRp->triangle_blocks),
+			&(pRp->memt) );
+	
+	if ( (pRp->vertexCount + vCount) >= VERTEX_IN_BLOCK
+		* pRp->vertex_blocks)
+		rt_add_block( pRp, VERTEX_IN_BLOCK * sizeof(rt_vertex), 
+			sizeof(rt_vertex) * vCount,  &(pRp->vertex_blocks),
+			&(pRp->memv) );
 	
 	clEnqueueWriteBuffer( pRp->oclContent.commQue, pRp->memv, 
-		CL_TRUE, sizeof(rt_verticle)*(pRp->vertexCount), 
-		sizeof(rt_verticle) * vCount, pV, 0, NULL, NULL );
+		CL_TRUE, sizeof(rt_vertex)*(pRp->vertexCount), 
+		sizeof(rt_vertex) * vCount, pV, 0, NULL, NULL );
 
 	clEnqueueWriteBuffer( pRp->oclContent.commQue, pRp->memt, 
 		CL_TRUE, sizeof(rt_triangle) * pRp->trianglesCount, 
@@ -153,8 +206,14 @@ void rt_render_pipe_add_material( rt_render_pipe *pRp, rt_material *pMat,
 	if ( (pRp == NULL) || (pMat == NULL) )
 		exit( -1 );
 
-	if ( (ind < 0) || (ind >= MATERIALS_IN_BLOCK) )
+	if ( (ind < 0) )
 		exit( -2 );
+
+	if ( ind >= MATERIALS_IN_BLOCK * pRp->material_blocks )
+		rt_add_block( pRp, MATERIALS_IN_BLOCK * sizeof(rt_material), 
+			sizeof(rt_material),  &(pRp->material_blocks),
+			&(pRp->memm) );
+
 
 	clEnqueueWriteBuffer( pRp->oclContent.commQue, pRp->memm, 
 		CL_TRUE, sizeof(rt_material) * ind, 
@@ -171,6 +230,11 @@ void rt_render_pipe_add_light( rt_render_pipe *pRp, void *pLight,
 	if ( (pRp == NULL) || (pLight == NULL) )
 		exit( -1 );
 
+	if ( (pRp->lightsCount + 1) > LIGHTS_IN_BLOCK * pRp->light_decs_blocks )
+		rt_add_block( pRp, sizeof(rt_light_desc) * LIGHTS_IN_BLOCK,
+			 sizeof(rt_light_desc), &(pRp->light_decs_blocks), 
+			 &(pRp->memldecs) );
+
 	pClLDecs = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->memldecs, 
 		CL_TRUE, CL_MAP_WRITE, 
 		sizeof(rt_cl_light_desc) * (pRp->lightsCount), 
@@ -185,8 +249,11 @@ void rt_render_pipe_add_light( rt_render_pipe *pRp, void *pLight,
 	switch( lt )
 	{
 	case RT_LT_POINT:	
-		if ( (pRp->lightsEnd + sizeof(rt_point_light)) >= LIGHTS_BLOCK_SIZE )
-			exit( -2 );
+		if ( (pRp->lightsEnd + sizeof(rt_point_light))
+			>= LIGHTS_BLOCK_SIZE * pRp->light_blocks )
+			rt_add_block( pRp, LIGHTS_BLOCK_SIZE, 
+				sizeof(rt_point_light), &(pRp->light_blocks),
+				&(pRp->meml) );
 
 		memPtr = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->meml, CL_TRUE, 
 			CL_MAP_WRITE, pRp->lightsEnd, sizeof(rt_point_light), 
@@ -233,7 +300,7 @@ void rt_init_opencl( rt_render_pipe *pRp )
 
 	ret = clGetPlatformIDs( 5, ocl->plID, &(ocl->plCount) );	
 	for ( i = 0; i < ocl->plCount; ++i )
-		clGetDeviceIDs( ocl->plID[i], CL_DEVICE_TYPE_ALL, 5, 
+		clGetDeviceIDs( ocl->plID[i], CL_DEVICE_TYPE_GPU, 5, 
 			(ocl->devID)[i], (ocl->devCount)+i );
 
 	{
@@ -463,7 +530,7 @@ void rt_opencl_render( rt_render_pipe *pRp )
 	clReleaseMemObject( memout );
 }
 
-void rt_cleanup( rt_render_pipe *pRp )
+void rt_render_pipe_cleanup( rt_render_pipe *pRp )
 {
 	if ( pRp == NULL )
 		exit( -1 );
@@ -491,7 +558,7 @@ void *rt_compute_sah_help_thread( void *pArgs )
 		extents_yz_area = args->pBox->extents.y * args->pBox->extents.z,
 		extents_xz_area = args->pBox->extents.x * args->pBox->extents.z;
 
-	rt_verticle *memVer = args->memVer;
+	rt_vertex *memVer = args->memVer;
 
 	switch ( args->axis )
 	{
@@ -661,7 +728,7 @@ void *rt_compute_sah_help_thread( void *pArgs )
 }
 
 void rt_kdtree_compute_sah( rt_ulong *memTp, rt_triangle *memTr, 
-	rt_verticle *memVer, rt_ulong primsCount, RT_AXIS axis, 
+	rt_vertex *memVer, rt_ulong primsCount, RT_AXIS axis, 
 	rt_box *pBox, rt_ulong *primsCountL, rt_ulong *primsCountR, 
 	float *pSep )
 {
@@ -796,7 +863,7 @@ rt_kdtree_count_info rt_kdtree_pack_to_buffer( rt_cl_kdtree_node *pNodeBuf,
 	}
 }
 
-rt_kdtree_count_info rt_kdtree_make_childs( rt_verticle *memVer, rt_triangle *memTr, 
+rt_kdtree_count_info rt_kdtree_make_childs( rt_vertex *memVer, rt_triangle *memTr, 
 	rt_kdtree_node *pNode, rt_box *bbox, 
 	int depth )
 {
@@ -973,7 +1040,7 @@ rt_kdtree_count_info rt_kdtree_make_childs( rt_verticle *memVer, rt_triangle *me
 void rt_kdtree_build( rt_render_pipe *pRp )
 {
 	rt_triangle *memTr = malloc( sizeof(rt_triangle) * pRp->trianglesCount );
-	rt_verticle *memVer = malloc( sizeof(rt_verticle) * pRp->vertexCount );
+	rt_vertex *memVer = malloc( sizeof(rt_vertex) * pRp->vertexCount );
 	rt_ulong i;
 	rt_vector3 minP, maxP;
 	rt_ulong primsInNodesCount;
@@ -989,11 +1056,11 @@ void rt_kdtree_build( rt_render_pipe *pRp )
 		* (pRp->vertexCount), 0, NULL, NULL, NULL );
 */
 	clEnqueueReadBuffer( pRp->oclContent.commQue, pRp->memt, CL_TRUE, 0, 
-		sizeof(rt_triangle) * pRp->trianglesCount, memTr, 
+		sizeof(rt_vertex) * pRp->trianglesCount, memTr, 
 		0, NULL, NULL );
 
 	clEnqueueReadBuffer( pRp->oclContent.commQue, pRp->memv, CL_TRUE, 0, 
-		sizeof(rt_verticle) * pRp->vertexCount, memVer, 
+		sizeof(rt_vertex) * pRp->vertexCount, memVer, 
 		0, NULL, NULL );
 
 
@@ -1099,7 +1166,6 @@ void rt_kdtree_build( rt_render_pipe *pRp )
 	}
 
 }
-
 
 rt_argb *rt_render_pipe_draw( rt_render_pipe *pRp )
 {

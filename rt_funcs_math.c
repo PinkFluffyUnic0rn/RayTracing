@@ -1,14 +1,5 @@
 #include "rt_funcs_math.h"
 
-void rt_vector2_create( rt_vector2 *pV, rt_float x, rt_float y )
-{
-	if ( pV == NULL )
-		exit( -1 );
-
-	pV->x = x;
-	pV->y = y;
-}
-
 void rt_vector3_create( rt_vector3 *pV, rt_float x, 
 	rt_float y, rt_float z )
 {
@@ -32,8 +23,66 @@ void rt_color_create( rt_color *pC,
 	pC->b = b;
 }
 
-void rt_matrix4_create_rotate( rt_matrix4 *pR, rt_float ang, 
-	RT_AXIS a )
+void rt_matrix3_create_scale( rt_matrix3 *pR, 
+	rt_float x, rt_float y, rt_float z )
+{
+	if ( pR == NULL )
+		exit( -1 );
+
+	pR->_11 = x;    pR->_12 = 0.0f; pR->_13 = 0.0f;
+	pR->_21 = 0.0f; pR->_22 = y;    pR->_23 = 0.0f;
+	pR->_31 = 0.0f; pR->_32 = 0.0f; pR->_33 = z;
+}
+
+void rt_matrix3_create_rotate( rt_matrix3 *pR, rt_float ang, RT_AXIS a )
+{
+	if ( pR == NULL )
+		exit( -1 );
+
+	switch ( a )
+	{
+	case RT_AXIS_X:
+		pR->_11 = 1.0f; pR->_12 = 0.0f;      pR->_13 = 0.0f;
+		pR->_21 = 0.0f; pR->_22 = cos(ang);  pR->_23 = sin(ang);
+		pR->_31 = 0.0f; pR->_32 = -sin(ang); pR->_33 = cos(ang);
+		break;
+
+	case RT_AXIS_Y:
+		pR->_11 = cos(ang); pR->_12 = 0.0f;     pR->_13 = -sin(ang);
+		pR->_21 = 0.0f;     pR->_22 = 1.0f;     pR->_23 = 0.0f;
+		pR->_31 = sin(ang); pR->_32 = 0.0f;     pR->_33 = cos(ang);
+		break;
+	default:
+		break;
+	}
+}
+
+void rt_matrix4_create_translate( rt_matrix4 *pR,
+	rt_float x, rt_float y, rt_float z )
+{
+	if ( pR == NULL )
+		exit( -1 );
+
+	pR->_11 = 1.0f; pR->_12 = 0.0f; pR->_13 = 0.0f; pR->_14 = 0.0f;
+	pR->_21 = 0.0f; pR->_22 = 1.0f; pR->_23 = 0.0f; pR->_24 = 0.0f;
+	pR->_31 = 0.0f; pR->_32 = 0.0f; pR->_33 = 1.0f; pR->_34 = 0.0f;
+	pR->_41 = x;    pR->_42 = y;    pR->_43 = z;    pR->_44 = 1.0f;
+}
+
+
+void rt_matrix4_create_scale( rt_matrix4 *pR, 
+	rt_float x, rt_float y, rt_float z )
+{
+	if ( pR == NULL )
+		exit( -1 );
+
+	pR->_11 = x;    pR->_12 = 0.0f; pR->_13 = 0.0f; pR->_14 = 0.0f;
+	pR->_21 = 0.0f; pR->_22 = y;    pR->_23 = 0.0f; pR->_24 = 0.0f;
+	pR->_31 = 0.0f; pR->_32 = 0.0f; pR->_33 = z;    pR->_34 = 0.0f;
+	pR->_41 = 0.0f; pR->_42 = 0.0f; pR->_43 = 0.0f; pR->_44 = 1.0f;
+}
+
+void rt_matrix4_create_rotate( rt_matrix4 *pR, rt_float ang, RT_AXIS a )
 {
 	if ( pR == NULL )
 		exit( -1 );
@@ -75,63 +124,16 @@ void rt_matrix4_create_rotate( rt_matrix4 *pR, rt_float ang,
 	}
 }
 
-void rt_matrix4_create_translate( rt_matrix4 *pR, 
-rt_float x, rt_float y, rt_float z )
+void rt_matrix4_create_projection( rt_matrix4 *pR, rt_float asp, rt_float hV )
 {
-	if ( pR == NULL )
-		exit( -1 );
-
-	pR->_11 = 1.0f; pR->_12 = 0.0f; pR->_13 = 0.0f; pR->_14 = 0.0f;
-	pR->_21 = 0.0f; pR->_22 = 1.0f; pR->_23 = 0.0f; pR->_24 = 0.0f;
-	pR->_31 = 0.0f; pR->_32 = 0.0f; pR->_33 = 1.0f; pR->_34 = 0.0f;
-	pR->_41 = x;    pR->_42 = y;    pR->_43 = z;    pR->_44 = 1.0f;
-}
-
-void rt_matrix3_create_translate( rt_matrix3 *pR, 
-	rt_float x, rt_float y )
-{
-	if ( pR == NULL )
-		exit( -1 );
-
-	pR->_11 = 1.0f; pR->_12 = 0.0f; pR->_13 = 0.0f;
-	pR->_21 = 0.0f; pR->_22 = 1.0f; pR->_23 = 0.0f;
-	pR->_31 = x; pR->_32 = y; pR->_33 = 1.0f;
-
-}
-
-void rt_matrix3_create_scale( rt_matrix3 *pR, 
-	rt_float x, rt_float y )
-{
-	if ( pR == NULL )
-		exit( -1 );
-
-	pR->_11 = x;    pR->_12 = 0.0f; pR->_13 = 0.0f;
-	pR->_21 = 0.0f; pR->_22 = y;    pR->_23 = 0.0f;
-	pR->_31 = 0.0f; pR->_32 = 0.0f; pR->_33 = 1.0f;
-}
-
-void rt_matrix3_create_rotate( rt_matrix3 *pR, rt_float ang, 
-	RT_AXIS a )
-{
-	if ( pR == NULL )
-		exit( -1 );
-
-	switch ( a )
-	{
-	case RT_AXIS_X:
-		pR->_11 = 1.0f; pR->_12 = 0.0f;      pR->_13 = 0.0f;
-		pR->_21 = 0.0f; pR->_22 = cos(ang);  pR->_23 = sin(ang);
-		pR->_31 = 0.0f; pR->_32 = -sin(ang); pR->_33 = cos(ang);
-		break;
-
-	case RT_AXIS_Y:
-		pR->_11 = cos(ang); pR->_12 = 0.0f;     pR->_13 = -sin(ang);
-		pR->_21 = 0.0f;     pR->_22 = 1.0f;     pR->_23 = 0.0f;
-		pR->_31 = sin(ang); pR->_32 = 0.0f;     pR->_33 = cos(ang);
-		break;
-	default:
-		break;
-	}
+	pR->_11 = 2.0f*tan(hV/2.0f)*asp; pR->_12 = 0.0f;
+		pR->_13 = 0.0f; pR->_14 = 0.0f;
+	pR->_21 = 0.0f; pR->_22 = 2.0f*tan(hV/2.0f);
+		pR->_23 = 0.0f; pR->_24 = 0.0f;
+	pR->_31 = 0.0f; pR->_32 = 0.0f;
+		pR->_33 = 1.0f; pR->_34 = 0.0f;
+	pR->_41 = 0.0f; pR->_42 = 0.0f;
+		pR->_43 = 0.0f; pR->_44 = 1.0f;
 }
 
 inline rt_float rt_clamp_float( rt_float f, rt_float b, rt_float e )
@@ -196,48 +198,6 @@ inline rt_float rt_vector3_length( rt_vector3 *pV )
 inline rt_float rt_vector3_length_quad( rt_vector3 *pV )
 {
 	return (pV->x*pV->x + pV->y*pV->y + pV->z*pV->z);
-}
-
-// nearest point to (0, 0)
-int rt_vector3_nearest_to_zero( rt_vector3 *v0, rt_vector3 *v1 )
-{
-	int d0, d1;
-
-	d0 = (v0->x)*(v0->x)+(v0->y)*(v0->y)+(v0->z)*(v0->z);
-	d1 = (v1->x)*(v1->x)+(v1->y)*(v1->y)+(v1->z)*(v1->z);
-
-	return (d0 < d1) ? 1 : 0;
-}
-
-rt_float rt_vector3_min_component( rt_vector3 *pV0 )
-{
-	rt_float min;
-
-	min = pV0->x;
-
-	if ( pV0->y < min )
-		min = pV0->y;
-	
-	if ( pV0->z < min )
-		min = pV0->z;
-
-	return min;
-}
-
-rt_float rt_vector3_max_component( rt_vector3 *pV0 )
-{
-	rt_float max;
-
-	max = pV0->x;
-
-	if ( pV0->y > max )
-		max = pV0->y;
-	
-	if ( pV0->z > max )
-		max = pV0->z;
-
-	return max;
-
 }
 
 void rt_vector3_matrix3_mult( rt_vector3 *pV, rt_matrix3 *pM, rt_vector3 *pR )
@@ -401,6 +361,52 @@ inline void rt_matrix4_transpose( rt_matrix4 *pM, rt_matrix4 *pR )
 	pR->_44 = pM->_44;
 }
 
+inline void rt_matrix3_inverse( rt_matrix3 *pM, rt_matrix3 *pR )
+{
+	rt_float invM[3][3], tmpM[3][3];
+	rt_float coef;
+	int i, j, k;
+
+	memcpy( tmpM, pM, sizeof(rt_matrix3) );
+
+	for ( i = 0; i < 3; ++i )
+		for ( j = 0; j < 3; ++j )
+			invM[i][j] = (i == j) ? 1.0f : 0.0;
+
+	for ( k = 0; k < 3; ++k )
+	{
+		coef = 1/tmpM[k][k];
+		for ( j = 0; j < 3; ++j )
+		{
+			tmpM[k][j] *= coef;
+			invM[k][j] *= coef;
+		}
+
+
+		for ( i = 0; i < 3; ++i )
+			if ( i != k )
+			{
+				coef = -(tmpM[i][k] / tmpM[k][k]);
+				for ( j = 0; j < 3; ++j )
+				{
+					tmpM[i][j] += tmpM[k][j]*coef;
+					invM[i][j] += invM[k][j]*coef;
+				} 
+			}			
+	}
+	memcpy( pR, invM, sizeof(rt_matrix4) );
+}
+
+inline void rt_matrix3_transpose( rt_matrix3 *pM, rt_matrix3 *pR )
+{
+	rt_float tmp;
+
+	tmp = pM->_12; pR->_12 = pM->_21; pR->_21 = tmp;	
+	tmp = pM->_13; pR->_13 = pM->_31; pR->_31 = tmp;	
+
+	tmp = pM->_23; pR->_23 = pM->_32; pR->_32 = tmp;	
+}
+
 inline void rt_matrix4_mult( rt_matrix4 *pM0, rt_matrix4 *pM1, rt_matrix4 *pR )
 {
 	rt_matrix4 tmp;
@@ -470,32 +476,6 @@ inline void rt_matrix3_mult( rt_matrix3 *pM0, rt_matrix3 *pM1, rt_matrix3 *pR )
 		+ (pM1->_33 * pM0->_33);
 
 	memcpy( pR, &tmp, sizeof(rt_matrix3) );
-}
-
-inline void rt_vector2_matrix3_mult( rt_vector2 *pV, rt_matrix3 *pM, rt_vector2 *pR )
-{
-	rt_vector2 tmp;
-
-	tmp.x = (pM->_11 * pV->x) + (pM->_21 * pV->y) + pM->_31;
-	tmp.y = (pM->_12 * pV->x) + (pM->_22 * pV->y) + pM->_32; 
-
-	memcpy( pR, &tmp, sizeof(rt_vector2) );
-}
-
-inline void rt_vector4_matrix4_mult( rt_vector4 *pV, rt_matrix4 *pM, rt_vector4 *pR )
-{
-	rt_vector4 tmp;
-
-	tmp.x = pM->_11 * pV->x + pM->_21 * pV->y 
-		+ pM->_31 * pV->z + pM->_41 * pV->w;
-	tmp.y = pM->_12 * pV->x + pM->_22 * pV->y 
-		+ pM->_32 * pV->z + pM->_42 * pV->w; 
-	tmp.z = pM->_13 * pV->x + pM->_23 * pV->y 
-		+ pM->_33 * pV->z + pM->_43 * pV->w;
-	tmp.w = pM->_14 * pV->x + pM->_24 * pV->y 
-		+ pM->_34 * pV->z + pM->_44 * pV->w;
-
-	memcpy( pR, &tmp, sizeof(rt_vector4) );
 }
 
 inline rt_float minF( rt_float a, rt_float b )

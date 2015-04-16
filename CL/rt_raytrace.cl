@@ -11,7 +11,7 @@ __kernel void raytrace( __constant rt_cl_raytrace_args *a,
 			__constant rt_camera *cams,
 			__global const rt_material *materials,
 			__global const rt_triangle *triangles,
-			__global const rt_verticle *verticies,
+			__global const rt_vertex *verticies,
 			__global const rt_cl_kdtree_node *kdtreeNodes,
 			__global const ulong *kdtreePrimsIdx,
 			__global rt_argb *o )
@@ -24,6 +24,8 @@ __kernel void raytrace( __constant rt_cl_raytrace_args *a,
 	int y = get_global_id(1) * (a->ydelta);
 	int x = get_global_id(0) * (a->xdelta);
 	int i, j;
+	float xTr = 2.0f/(float)(a->w-1);
+	float yTr = 2.0f/(float)(a->h-1);
 	
 	pRpData.boundingBox = a->boundingBox;
 	pRpData.fillCol = a->fillCol;
@@ -51,16 +53,13 @@ __kernel void raytrace( __constant rt_cl_raytrace_args *a,
 		{
 			projRay.src.x = projRay.src.y = projRay.src.z = 0.0f;
 			projRay.dest.z = 1.0f;	
-			projRay.dest.x = (float)(x+j);
-			projRay.dest.y = (float)(y+i);
+			projRay.dest.x = xTr*(float)(x+j) - 1.0f;
+			projRay.dest.y = yTr*(float)(y+i) - 1.0f;
 
 			rt_vector3_matrix4_mult( projRay.src,
 				&(pCurCam.world), 
 				&(projRay.src) );
 
-			rt_vector3_matrix3_mult( projRay.dest, 
-				&(pCurCam.dcToSsc), &(projRay.dest) );
-			
 			rt_vector3_matrix4_mult_dir( projRay.dest,
 				&(pCurCam.viewToPersp), 
 				&(projRay.dest) );

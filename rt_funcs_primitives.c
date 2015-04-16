@@ -50,25 +50,11 @@ void rt_point_light_create( rt_point_light *pS,
 	pS->rad = r;
 }
 
-void rt_camera_create( rt_camera *pC, int w, int h, rt_float hV, 
-	rt_float fZ )
+void rt_camera_create( rt_camera *pC, rt_float asp, rt_float hV )
 {
 	if ( pC == NULL )
 		exit( -1 );
-
-	pC->farZ = fZ;
-	pC->hView = hV;
-	pC->wView = 
-
-	pC->aspect = (rt_float)w / (rt_float)h;
 	
-	pC->dcToSsc._11 = 2.0f/(rt_float)(w-1); pC->dcToSsc._12 = 0;
-		pC->dcToSsc._13 = 0;
-	pC->dcToSsc._21 = 0; pC->dcToSsc._22 = 2.0f/(rt_float)(h-1); 
-		pC->dcToSsc._23 = 0;
-	pC->dcToSsc._31 = -1; pC->dcToSsc._32 = -1;          
-		pC->dcToSsc._33 = 1;
-
 	pC->world._11 = 1; pC->world._12 = 0;   
 		pC->world._13 = 0; pC->world._14 = 0;
 	pC->world._21 = 0; pC->world._22 = 1;   
@@ -78,33 +64,8 @@ void rt_camera_create( rt_camera *pC, int w, int h, rt_float hV,
 	pC->world._41 = 0; pC->world._42 = 0;   
 		pC->world._43 = 0; pC->world._44 = 1;
 
-
-	pC->viewToPersp._11 = 2.0f*tan(hV/2.0f)*(pC->aspect); 
-		pC->viewToPersp._12 = 0.0f; pC->viewToPersp._13 = 0.0f;
-			pC->viewToPersp._14 = 0.0f;
-	pC->viewToPersp._21 = 0.0f; pC->viewToPersp._22 = 2.0f*tan(hV/2.0f);
-		pC->viewToPersp._23 = 0.0f; pC->viewToPersp._24 = 0.0f;
-	pC->viewToPersp._31 = 0.0f; pC->viewToPersp._32 = 0.0f;
-		pC->viewToPersp._33 = 1.0f; pC->viewToPersp._34 = 0.0f;
-	pC->viewToPersp._41 = 0.0f; pC->viewToPersp._42 = 0.0f;
-		pC->viewToPersp._43 = 0.0f; pC->viewToPersp._44 = 1.0f;
-
-
-	pC->camPos.x = pC->camPos.y = pC->camPos.z = 0.0f;
-
-	rt_matrix4_inverse( &(pC->world), &(pC->worldInverse) );
-	rt_matrix4_transpose( &(pC->worldInverse), &(pC->worldInvTr) );
-	rt_matrix4_inverse( &(pC->viewToPersp), &(pC->viewToPerspInvTr) );
-	rt_matrix4_transpose( &(pC->viewToPerspInvTr),
-		&(pC->viewToPerspInvTr) );
-}
-
-void rt_camera_set_screen_space_matrix( rt_camera *pC, rt_matrix3 *pM )
-{
-	if ( (pC == NULL) || (pM == NULL) )
-		exit ( -1 );
-
-	pC->dcToSsc = *pM;
+	rt_matrix4_create_projection( &(pC->viewToPersp), 
+		asp, hV );
 }
 
 void rt_camera_set_view_matrix( rt_camera *pC, rt_matrix4 *pM )

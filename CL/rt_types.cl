@@ -49,11 +49,11 @@ typedef float2 rt_vector2;
 typedef float3 rt_vector3;
 typedef float4 rt_vector4;
 
-typedef struct _rt_vecticle
+typedef struct _rt_vertex
 {
 	rt_vector3 pos;
 	rt_vector3 norm;
-} rt_verticle;
+} rt_vertex;
 
 typedef struct _rt_ray
 {
@@ -65,17 +65,7 @@ typedef struct _rt_ray
 typedef struct _rt_camera
 {
 	rt_matrix4 world;
-	rt_matrix4 worldInverse;
 	rt_matrix4 viewToPersp;
-	rt_matrix4 viewToPerspInvTr;
-	rt_matrix4 worldInvTr;
-
-	rt_matrix3 dcToSsc;
-	rt_vector3 camPos;
-	
-	float farZ;
-	float hView, wView;
-	float aspect;
 } rt_camera;
 
 typedef struct _rt_argb
@@ -206,7 +196,7 @@ typedef struct _rt_cl_render_pipe_data
 	__global const rt_cl_light_desc *lightsDecs;
 	__global const rt_material *materialBuf;
 	__global const rt_triangle *trianglesBuf;
-	__global const rt_verticle *vertexBuf;
+	__global const rt_vertex *vertexBuf;
 	__global const rt_cl_kdtree_node *kdtreeNodesBuf;
 	__global const ulong *kdtreePrimsIdxBuf;
 

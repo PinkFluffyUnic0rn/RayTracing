@@ -27,7 +27,7 @@ void tabulation( int count )
 }
 
 
-void rt_dout_kdtree( rt_verticle *pV, rt_triangle *pTr, 
+void rt_dout_kdtree( rt_vertex *pV, rt_triangle *pTr, 
 	rt_render_pipe *pRp, rt_kdtree_node *pNode, int depth )
 {
 	tabulation( depth );
@@ -98,7 +98,7 @@ void rt_dout_kdtree( rt_verticle *pV, rt_triangle *pTr,
 	printf( "}\n\n" );
 }
 
-void rt_cl_dout_kdtree( rt_verticle *pV, rt_triangle *pTr, rt_cl_kdtree_node *pN, 
+void rt_cl_dout_kdtree( rt_vertex *pV, rt_triangle *pTr, rt_cl_kdtree_node *pN, 
 	rt_ulong *pP, rt_render_pipe *pRp, rt_ulong nodeN, int depth )
 {
 	tabulation( depth );

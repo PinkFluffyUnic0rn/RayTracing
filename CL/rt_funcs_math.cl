@@ -118,11 +118,6 @@ void rt_vector3_matrix3_mult( rt_vector3 pV, rt_matrix3 *pM, rt_vector3 *pR )
 // reflect vector by normal
 inline rt_vector3 rt_vector3_reflect( rt_vector3 pV, rt_vector3 pN )
 {
-/*	rt_vector3 tmpVec;
-
-	rt_vector3_scalar_mult( pN, 2.0f * rt_vector3_dot( pV, pN ), &tmpVec );
-	rt_vector3_sub( &tmpVec, pV, pR );
-*/
 	rt_vector3 tmpVec = (pV - pN * 2.0f * dot( pV, pN ));
 
 	return tmpVec;

@@ -32,7 +32,6 @@ inline ulong rt_primitive_get_material( rt_cl_render_pipe_data *pRp,
 inline void rt_get_point_from_ray( rt_cl_render_pipe_data *pRp, rt_ray *pRay, 
 	int b, ulong prN, float t, rt_vector3 *pPoint, rt_vector3 *pNormal )
 {
-	
 	switch ( pRp->primsDecs[prN].pt )
 	{
 	case RT_PT_SPHERE:

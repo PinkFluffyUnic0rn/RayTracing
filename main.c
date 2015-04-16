@@ -11,12 +11,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "rt_types.h"
-#include "rt_funcs_render_pipe.h"
+#include "rt.h"
 
 #define SPHERE_COUNT           10
 #define POINT_LIGHTS_COUNT     1
-#define SQUARES_COUNT_SQRT     150
+#define SQUARES_COUNT_SQRT     50
 #define BOTTOM                 1
 
 #define MATERIAL_COUNT         2 + SPHERE_COUNT
@@ -48,7 +47,7 @@ rt_render_pipe renderPipe;
 
 rt_sphere sp[SPHERE_COUNT];
 rt_triangle tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 10];
-rt_verticle vx[(SQUARES_COUNT_SQRT+1)*(SQUARES_COUNT_SQRT+1) + 20];
+rt_vertex vx[(SQUARES_COUNT_SQRT+1)*(SQUARES_COUNT_SQRT+1) + 20];
 rt_point_light lt[POINT_LIGHTS_COUNT];
 rt_float koef[SPHERE_COUNT];
 rt_material mt[MATERIAL_COUNT];
@@ -67,6 +66,7 @@ float centralSpherePosY = 0.0f;
 float dT = 0.0001f;
 float oldDT = 0.001f;
 int paused = 0;
+rt_vector3 camPos;
 
 //parameter for spheres moving equasions
 int rotStep( gpointer data )
@@ -99,12 +99,12 @@ void keyPress( GtkWidget *w, GdkEvent *e, gpointer usrData )
 	case GDK_KEY_u:
 		rt_matrix4_create_rotate( &m, M_PI*0.01f, RT_AXIS_Z );
 	
-		rt_matrix4_create_translate( &tmp, -cam->camPos.x, 
-			-cam->camPos.y, -cam->camPos.z );
+		rt_matrix4_create_translate( &tmp, -camPos.x, 
+			-camPos.y, -camPos.z );
 		rt_matrix4_mult( &m, &tmp, &m );
 
-		rt_matrix4_create_translate( &tmp, cam->camPos.x, 
-			cam->camPos.y, cam->camPos.z );
+		rt_matrix4_create_translate( &tmp, camPos.x, 
+			camPos.y, camPos.z );
 
 		rt_matrix4_mult( &tmp, &m, &m );
 
@@ -114,12 +114,12 @@ void keyPress( GtkWidget *w, GdkEvent *e, gpointer usrData )
 	case GDK_KEY_bracketleft:
 		rt_matrix4_create_rotate( &m, -M_PI*0.01f, RT_AXIS_Z );
 
-		rt_matrix4_create_translate( &tmp, -cam->camPos.x, 
-			-cam->camPos.y, -cam->camPos.z );
+		rt_matrix4_create_translate( &tmp, -camPos.x, 
+			-camPos.y, -camPos.z );
 		rt_matrix4_mult( &m, &tmp, &m );
 
-		rt_matrix4_create_translate( &tmp, cam->camPos.x, 
-			cam->camPos.y, cam->camPos.z );
+		rt_matrix4_create_translate( &tmp, camPos.x, 
+			camPos.y, camPos.z );
 
 		rt_matrix4_mult( &tmp, &m, &m );
 
@@ -129,12 +129,12 @@ void keyPress( GtkWidget *w, GdkEvent *e, gpointer usrData )
 	case GDK_KEY_p:
 		rt_matrix4_create_rotate( &m, -M_PI*0.01f, RT_AXIS_Y );
 
-		rt_matrix4_create_translate( &tmp, -cam->camPos.x, 
-			-cam->camPos.y, -cam->camPos.z );
+		rt_matrix4_create_translate( &tmp, -camPos.x, 
+			-camPos.y, -camPos.z );
 		rt_matrix4_mult( &m, &tmp, &m );
 
-		rt_matrix4_create_translate( &tmp, cam->camPos.x, 
-			cam->camPos.y, cam->camPos.z );
+		rt_matrix4_create_translate( &tmp, camPos.x, 
+			camPos.y, camPos.z );
 
 		rt_matrix4_mult( &tmp, &m, &m );
 
@@ -144,12 +144,12 @@ void keyPress( GtkWidget *w, GdkEvent *e, gpointer usrData )
 	case GDK_KEY_i:
 		rt_matrix4_create_rotate( &m, M_PI*0.01f, RT_AXIS_Y );
 
-		rt_matrix4_create_translate( &tmp, -cam->camPos.x, 
-			-cam->camPos.y, -cam->camPos.z );
+		rt_matrix4_create_translate( &tmp, -camPos.x, 
+			-camPos.y, -camPos.z );
 		rt_matrix4_mult( &m, &tmp, &m );
 
-		rt_matrix4_create_translate( &tmp, cam->camPos.x, 
-			cam->camPos.y, cam->camPos.z );
+		rt_matrix4_create_translate( &tmp, camPos.x, 
+			camPos.y, camPos.z );
 
 		rt_matrix4_mult( &tmp, &m, &m );
 
@@ -159,12 +159,12 @@ void keyPress( GtkWidget *w, GdkEvent *e, gpointer usrData )
 	case GDK_KEY_apostrophe:
 		rt_matrix4_create_rotate( &m, M_PI*0.01f, RT_AXIS_X );
 
-		rt_matrix4_create_translate( &tmp, -cam->camPos.x, 
-			-cam->camPos.y, -cam->camPos.z );
+		rt_matrix4_create_translate( &tmp, -camPos.x, 
+			-camPos.y, -camPos.z );
 		rt_matrix4_mult( &m, &tmp, &m );
 
-		rt_matrix4_create_translate( &tmp, cam->camPos.x, 
-			cam->camPos.y, cam->camPos.z );
+		rt_matrix4_create_translate( &tmp, camPos.x, 
+			camPos.y, camPos.z );
 
 		rt_matrix4_mult( &tmp, &m, &m );
 
@@ -174,12 +174,12 @@ void keyPress( GtkWidget *w, GdkEvent *e, gpointer usrData )
 	case GDK_KEY_j:
 		rt_matrix4_create_rotate( &m, -M_PI*0.01f,RT_AXIS_X );
 
-		rt_matrix4_create_translate( &tmp, -cam->camPos.x, 
-			-cam->camPos.y, -cam->camPos.z );
+		rt_matrix4_create_translate( &tmp, -camPos.x, 
+			-camPos.y, -camPos.z );
 		rt_matrix4_mult( &m, &tmp, &m );
 
-		rt_matrix4_create_translate( &tmp, cam->camPos.x, 
-			cam->camPos.y, cam->camPos.z );
+		rt_matrix4_create_translate( &tmp, camPos.x, 
+			camPos.y, camPos.z );
 
 		rt_matrix4_mult( &tmp, &m, &m );
 
@@ -188,31 +188,31 @@ void keyPress( GtkWidget *w, GdkEvent *e, gpointer usrData )
 
 	case GDK_KEY_semicolon:
 		rt_matrix4_create_translate( &m, 0.0f, 1.0f, 0.0f );
-		cam->camPos.y -= 1.0f;
+		camPos.y -= 1.0f;
 		goto applyTransform;
 
 	case GDK_KEY_k:
 		rt_matrix4_create_translate( &m, 0.0f, -1.0f, 0.0f );
-		cam->camPos.y += 1.0f;
+		camPos.y += 1.0f;
 		goto applyTransform;
 
 	case GDK_KEY_o:
 		rt_matrix4_create_translate( &m, 1.0f, 0.0f, 0.0f );
-		cam->camPos.x -= 1.0f;
+		camPos.x -= 1.0f;
 		goto applyTransform;
 
 	case GDK_KEY_l:
 		rt_matrix4_create_translate( &m, -1.0f, 0.0f, 0.0f );
-		cam->camPos.x += 1.0f;
+		camPos.x += 1.0f;
 		goto applyTransform;
 
 	case GDK_KEY_space:
-		cam->camPos.z += 1.0f;
+		camPos.z += 1.0f;
 		rt_matrix4_create_translate( &m, 0.0f, 0.0f, -1.0f );
 		goto applyTransform;
 
 	case GDK_KEY_comma:
-		cam->camPos.z -= 1.0f;
+		camPos.z -= 1.0f;
 		rt_matrix4_create_translate( &m, 0.0f, 0.0f, 1.0f );
 		goto applyTransform;
 	
@@ -250,10 +250,6 @@ void keyPress( GtkWidget *w, GdkEvent *e, gpointer usrData )
 	applyTransform:
 		rt_matrix4_mult( &(cam->world), &m,
 			&(cam->world) );
-		rt_matrix4_inverse(  &(cam->world),  &(cam->worldInverse) );
-		rt_matrix4_transpose( &(cam->worldInverse),
-			&(cam->worldInvTr) );
-
 		gtk_widget_queue_draw(mainWindow);
 	}
 
@@ -406,11 +402,8 @@ void draw( GtkWidget *wgt, cairo_t *cr, gpointer ud )
 	if ( SQUARES_COUNT_SQRT )
 		buildPlaneOfTriangles();
 
-
 	for ( i = 0; i < MATERIAL_COUNT; ++i ) 
 		rt_render_pipe_add_material( &renderPipe, mt+i, i );
-
-
 
 	//add light to render pipe
 	for ( i = 0; i < POINT_LIGHTS_COUNT; ++i )
@@ -418,7 +411,6 @@ void draw( GtkWidget *wgt, cairo_t *cr, gpointer ud )
 		rt_render_pipe_add_light( &renderPipe, (void *)(lt+i),
 			RT_LT_POINT );
 	}
-
 
 	//add primitives to render pipe
 	if ( SPHERE_COUNT > 0 )
@@ -484,7 +476,7 @@ void draw( GtkWidget *wgt, cairo_t *cr, gpointer ud )
 		printf( "fps %f\n", (double) avr / (double) frm );
 		avr = 0.0;
 		frm = 0;
-	} 
+	}
 }
 
 int main( int argc, char *argv[] )
@@ -506,6 +498,13 @@ int main( int argc, char *argv[] )
 
 	//init rt
 	rt_init( *argv );
+
+	//initiliaze render pipe
+	rt_camera_create( &frust, (float)WIDTH / (float)HEIGHT, 0.125*M_PI );
+
+	rt_render_pipe_create( &renderPipe, WIDTH, HEIGHT );
+
+	rt_render_pipe_set_camera( &renderPipe, &frust );
 
 	//create dir for writing images, if it doesn't exists
 	if ( RENDER_TO_PNGS )
@@ -557,14 +556,8 @@ int main( int argc, char *argv[] )
 	rt_color_create( col, 1.0f, 1.0f, 1.0f, 1.0f );
 	rt_vector3_create( v, -20.0f, -35.0f, 0.0f );
 
-	rt_point_light_create( lt, v, 100.0f, col );
-
-	//initiliaze render pipe
-	rt_camera_create( &frust, WIDTH, HEIGHT, 0.125*M_PI, 100.0f );
-
-	rt_render_pipe_create( &renderPipe, WIDTH, HEIGHT, data );
-
-	rt_render_pipe_set_camera( &renderPipe, &frust );
+	for ( i = 0; i < POINT_LIGHTS_COUNT; ++i )
+		rt_point_light_create( lt+i, v, 100.0f, col );
 
 	//set camera position
 	renderPipe.cam->world._11 = 1.0f;          
@@ -587,9 +580,9 @@ int main( int argc, char *argv[] )
 	renderPipe.cam->world._43 = -43.0f;        
 	renderPipe.cam->world._44 = 1.0f;          
                                                    
-	renderPipe.cam->camPos.x = 0.0f;           
-	renderPipe.cam->camPos.y = 12.0f;          
-	renderPipe.cam->camPos.z = 43.0f;          
+	camPos.x = 0.0f;           
+	camPos.y = 12.0f;          
+	camPos.z = 43.0f;          
 
 	{
 		rt_ulong vertexOffset = SQUARES_COUNT_SQRT 
@@ -792,7 +785,7 @@ int main( int argc, char *argv[] )
 		(initialTime % 3600) / 60,
 		(initialTime % 60) );
 
-	rt_cleanup( &renderPipe );
+	rt_render_pipe_cleanup( &renderPipe );
 
 	return 0;
 }
