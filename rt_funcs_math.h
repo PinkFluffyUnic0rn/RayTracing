@@ -46,7 +46,6 @@ inline rt_float rt_vector3_length( rt_vector3 *pV );
 
 inline rt_float rt_vector3_length_quad( rt_vector3 *pV );
 
-
 inline rt_float rt_vector3_dot( rt_vector3 *pV0, rt_vector3 *pV1 );
 
 inline void rt_vector3_cross( rt_vector3 *pV0, rt_vector3 *pV1, rt_vector3 *pR );

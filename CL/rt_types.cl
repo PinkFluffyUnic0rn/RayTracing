@@ -114,14 +114,6 @@ typedef struct _rt_triangle
 	ulong mat;
 } rt_triangle;
 
-typedef struct _rt_line
-{
-	rt_vector3 p0;
-	rt_vector3 p1;
-	float width;
-	ulong mat;
-} rt_line;
-
 typedef struct _rt_box
 {
 	rt_vector3 center;
@@ -135,19 +127,7 @@ typedef struct _rt_point_light
 	float rad;
 } rt_point_light;
 
-typedef struct _rt_prim_desc
-{
-	RT_PRIMITIVE_TYPE pt;
-	void *offset;
-} rt_prim_desc;
-
-typedef struct _rt_light_desc
-{
-	RT_LIGHT_TYPE lt;
-	void *offset;
-} rt_light_desc;
-
-typedef struct _rt_cl_raytrace_args
+typedef struct _rt_raytrace_args
 {	
 	rt_box boundingBox;
 	rt_color fillCol;
@@ -159,19 +139,19 @@ typedef struct _rt_cl_raytrace_args
 	int h;
 	int xdelta;
 	int ydelta;
-} rt_cl_raytrace_args;
+} rt_raytrace_args;
 
-typedef struct _rt_cl_prim_desc
+typedef struct _rt_prim_desc
 {
 	ulong offset;
 	RT_PRIMITIVE_TYPE pt;
-} rt_cl_prim_desc;
+} rt_prim_desc;
 
-typedef struct _rt_cl_light_desc
+typedef struct _rt_light_desc
 {
 	ulong offset;
 	RT_LIGHT_TYPE lt;
-} rt_cl_light_desc;
+} rt_light_desc;
 
 typedef struct _rt_cl_kdtree_node
 {
@@ -191,9 +171,9 @@ typedef struct _rt_cl_render_pipe_data
 	rt_color fillCol;
 
 	__global const void *primsBuf;
-	__global const rt_cl_prim_desc *primsDecs;
+	__global const rt_prim_desc *primsDecs;
 	__global const void *lightsBuf;
-	__global const rt_cl_light_desc *lightsDecs;
+	__global const rt_light_desc *lightsDecs;
 	__global const rt_material *materialBuf;
 	__global const rt_triangle *trianglesBuf;
 	__global const rt_vertex *vertexBuf;

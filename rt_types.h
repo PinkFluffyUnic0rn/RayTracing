@@ -54,18 +54,11 @@ typedef cl_float2 rt_vector2;
 typedef cl_float3 rt_vector3;
 typedef cl_float4 rt_vector4;
 
-typedef struct _rt_vectex
+typedef struct _rt_vertex
 {
 	rt_vector3 pos;
 	rt_vector3 norm;
 } rt_vertex;
-
-typedef struct _rt_ray
-{
-	rt_vector3 src;
-	rt_vector3 dest;
-	rt_vector3 invDest;
-} rt_ray;
 
 typedef struct _rt_camera
 {
@@ -119,14 +112,6 @@ typedef struct _rt_triangle
 	rt_ulong mat;
 } rt_triangle;
 
-typedef struct _rt_line
-{
-	rt_vector3 p0;
-	rt_vector3 p1;
-	float width;
-	rt_ulong mat;
-} rt_line;
-
 typedef struct _rt_box
 {
 	rt_vector3 center;
@@ -139,18 +124,6 @@ typedef struct _rt_point_light
 	rt_vector3 pos;
 	rt_float rad;
 } rt_point_light;
-
-typedef struct _rt_prim_desc
-{
-	RT_PRIMITIVE_TYPE pt;
-	void *offset;
-} rt_prim_desc;
-
-typedef struct _rt_light_desc
-{
-	RT_LIGHT_TYPE lt;
-	void *offset;
-} rt_light_desc;
 
 typedef struct _rt_compute_sah_help_args
 {
@@ -173,7 +146,7 @@ typedef struct _rt_compute_sah_help_return
 	rt_ulong resPrimsR;
 } rt_compute_sah_help_return;
 
-typedef struct _rt_cl_raytrace_args
+typedef struct _rt_raytrace_args
 {	
 	rt_box boundingBox;
 	rt_color fillCol;
@@ -185,19 +158,19 @@ typedef struct _rt_cl_raytrace_args
 	rt_int h;
 	rt_int xdelta;
 	rt_int ydelta;
-} rt_cl_raytrace_args;
+} rt_raytrace_args;
 
-typedef struct _rt_cl_prim_desc
+typedef struct _rt_prim_desc
 {
 	rt_ulong offset;
 	RT_PRIMITIVE_TYPE pt;
-} rt_cl_prim_desc;
+} rt_prim_desc;
 
-typedef struct _rt_cl_light_desc
+typedef struct _rt_light_desc
 {
 	rt_ulong offset;
 	RT_LIGHT_TYPE lt;
-} rt_cl_light_desc;
+} rt_light_desc;
 
 typedef struct _rt_cl_kdtree_node
 {
@@ -229,28 +202,24 @@ typedef struct _rt_kdtree_node
 
 typedef struct _rt_opencl_content
 {
-	cl_platform_id plID[5];
-	cl_uint plCount;
-	cl_device_id devID[5][5];
-	cl_uint devCount[5];
-	cl_uint computeUnitsCount;
+	cl_device_id dev;
 	size_t workGroupSz[2];
-	rt_box boundingBox;
 	cl_context context;
 	cl_command_queue commQue;
-	cl_program prog;
 	cl_kernel raytrace;
 } rt_opencl_content;
 
 typedef struct _rt_render_pipe
 {	
-	ulong prim_blocks;
-	ulong prim_decs_blocks;
-	ulong light_blocks;
-	ulong light_decs_blocks;
-	ulong triangle_blocks;
-	ulong vertex_blocks;
-	ulong material_blocks;
+	rt_opencl_content oclContent;
+	
+	ulong primBlocks;
+	ulong primDecsBlocks;
+	ulong lightBlocks;
+	ulong lightDecsBlocks;
+	ulong triangleBlocks;
+	ulong vertexBlocks;
+	ulong materialBlocks;
 
 	cl_mem memp;
 	cl_mem mempdecs;
@@ -266,24 +235,14 @@ typedef struct _rt_render_pipe
 	rt_ulong trianglesCount;
 
 	cl_mem memv;
-	size_t vertexCount;
+	rt_ulong vertexCount;
 
 	cl_mem memm;
+	cl_mem memc;
 
-	cl_mem memi;
-	cl_mem memn;
-
-	
 	rt_argb *screenData;
-
-	rt_camera *cam;
-
-	rt_opencl_content oclContent;
-
-	rt_box boundingBox;
-	rt_color fillCol;
 	int w;
-	int h;
+	int h;	
 } rt_render_pipe;
 
 #endif

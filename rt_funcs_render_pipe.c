@@ -23,15 +23,89 @@ void rt_render_pipe_create( rt_render_pipe *pRp, int w, int h )
 	if ( !pRp )
 		exit( -1 );
 
-	pRp->w = w;
-	pRp->h = h;
-
 	rt_init_opencl( pRp );
 	rt_init_buffers( pRp );
 
-	pRp->cam = malloc( sizeof(rt_camera) );
-	pRp->screenData = (rt_argb *) malloc( sizeof(rt_argb) * h * w );
+	pRp->screenData = NULL;
+	rt_render_pipe_set_image_size( pRp, w, h );
+}
 
+void rt_render_pipe_calc_wg_size( rt_render_pipe *pRp, int w, int h )
+{
+	size_t maxSz;
+
+	rt_opencl_content *ocl = &(pRp->oclContent);
+
+	clGetDeviceInfo( ocl->dev, 
+		CL_DEVICE_MAX_WORK_GROUP_SIZE, 
+		sizeof(size_t), &maxSz, NULL );
+
+	ocl->workGroupSz[0] = (size_t) sqrt( maxSz );
+	ocl->workGroupSz[1] = (size_t) sqrt( maxSz );
+
+	ocl->workGroupSz[0] *= ((float)pRp->w < (float)pRp->h) ? 
+		((float)pRp->w / (float)pRp->h) : 1.0f; 
+	ocl->workGroupSz[1] *= ((float)pRp->h < (float)pRp->w) ? 
+		((float)pRp->h / (float)pRp->w) : 1.0f;
+
+
+	if ( !(is_power_of_two_size_t(ocl->workGroupSz[0]) 
+		&& is_power_of_two_size_t(ocl->workGroupSz[1])) )
+	{
+		size_t *minSz = NULL, *maxSz = NULL;
+		size_t maxSzPos = 0, minSzPos = 0;
+		size_t mask;
+
+		if ( ocl->workGroupSz[0] > ocl->workGroupSz[1] )
+		{
+			minSz = ocl->workGroupSz + 1;
+			maxSz = ocl->workGroupSz;
+		}
+		else
+		{
+			minSz = ocl->workGroupSz;
+			maxSz = ocl->workGroupSz + 1;
+		}
+
+		*maxSz <<= 1;
+			
+		mask = (size_t)(1) << (8 * sizeof( size_t ) - 1);
+			
+		while ( !(*maxSz & mask) )
+		{
+			mask >>= 1;
+			++maxSzPos;
+		}
+			
+		mask = (size_t)(1) << (8 * sizeof( size_t ) - 1);
+			
+		while ( !(*minSz & mask) )
+		{
+			mask >>= 1;
+			++minSzPos;
+		}
+
+		*minSz >>= 8 * sizeof(size_t) - minSzPos - 1;
+		*minSz <<= 8 * sizeof(size_t) - minSzPos - 1;
+
+		*maxSz >>= 8 * sizeof(size_t) - maxSzPos - 1;
+		*maxSz <<= 8 * sizeof(size_t) - maxSzPos - 1;
+	}	
+}
+
+void rt_render_pipe_set_image_size( rt_render_pipe *pRp, int w, int h )
+{
+	if ( !pRp )
+		exit( -1 );
+
+	rt_render_pipe_calc_wg_size( pRp, w, h );
+
+	if ( pRp->screenData )
+		free( pRp->screenData );
+
+	pRp->screenData = (rt_argb *) malloc( sizeof(rt_argb) * h * w );
+	pRp->w = w;
+	pRp->h = h;
 }
 
 void rt_render_pipe_reset_blocks( rt_render_pipe *pRp )
@@ -55,23 +129,23 @@ void rt_init_buffers( rt_render_pipe *pRp )
 	if ( pRp == NULL )
 		exit( -1 );
 
-	pRp->prim_blocks = 1;
-	pRp->prim_decs_blocks = 1;
-	pRp->light_blocks = 1;
-	pRp->light_decs_blocks = 1;
-	pRp->triangle_blocks = 1;
-	pRp->vertex_blocks = 1;
-	pRp->material_blocks = 1;
+	pRp->primBlocks = 1;
+	pRp->primDecsBlocks = 1;
+	pRp->lightBlocks = 1;
+	pRp->lightDecsBlocks = 1;
+	pRp->triangleBlocks = 1;
+	pRp->vertexBlocks = 1;
+	pRp->materialBlocks = 1;
 
 	pRp->mempdecs = clCreateBuffer( pRp->oclContent.context, CL_MEM_READ_ONLY, 
-		sizeof(rt_cl_prim_desc) * PRIMS_IN_BLOCK, NULL, NULL );
+		sizeof(rt_prim_desc) * PRIMS_IN_BLOCK, NULL, NULL );
 	pRp->memp = clCreateBuffer( pRp->oclContent.context, CL_MEM_READ_ONLY, 
 		PRIMS_BLOCK_SIZE, NULL, NULL );
 	pRp->primsEnd = 0;
 	pRp->primsCount = 0;
 
 	pRp->memldecs = clCreateBuffer( pRp->oclContent.context, CL_MEM_READ_ONLY, 
-		sizeof(rt_cl_light_desc) * LIGHTS_IN_BLOCK, NULL, NULL );
+		sizeof(rt_light_desc) * LIGHTS_IN_BLOCK, NULL, NULL );
 	pRp->meml = clCreateBuffer( pRp->oclContent.context, CL_MEM_READ_ONLY, 
 		LIGHTS_BLOCK_SIZE, NULL, NULL );
 	pRp->lightsEnd = 0;
@@ -87,22 +161,36 @@ void rt_init_buffers( rt_render_pipe *pRp )
 
 	pRp->memm = clCreateBuffer( pRp->oclContent.context, CL_MEM_READ_ONLY, 
 		sizeof(rt_material)*MATERIALS_IN_BLOCK, NULL, NULL );
+
+	pRp->memc = clCreateBuffer( pRp->oclContent.context, CL_MEM_READ_ONLY, 
+		sizeof(rt_camera), NULL, NULL );
 }
 
 void rt_render_pipe_set_camera( rt_render_pipe *pRp, 
 	rt_camera *pFr )
 {
+	rt_camera *memPtr;
+	
 	if ( (pRp == NULL) || (pFr == NULL) )
 		exit( -1 );
 
-	memcpy( pRp->cam, pFr, sizeof(rt_camera) );
+	memPtr = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->memc, 
+		CL_TRUE, CL_MAP_WRITE, 0, sizeof(rt_camera), 0, NULL, NULL, NULL );
+
+	memcpy( memPtr, pFr, sizeof(rt_camera) );
+
+	clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memc, memPtr, 0, 
+		NULL, NULL );
 }
 
 void rt_add_block( rt_render_pipe *pRp, size_t blockSize, size_t nededSize,
 	rt_ulong *curBlocksCount, cl_mem *buf )
 {
 	cl_mem tmp;
-	
+
+	if ( pRp == NULL )
+		exit( -1 );
+
 	rt_ulong newBlocksCount = nededSize / blockSize;
 	newBlocksCount = newBlocksCount ? newBlocksCount : 1;
 	
@@ -121,21 +209,21 @@ void rt_add_block( rt_render_pipe *pRp, size_t blockSize, size_t nededSize,
 void rt_render_pipe_add_primitive( rt_render_pipe *pRp, void *pPrim,
 	RT_PRIMITIVE_TYPE pt )
 {
-	rt_cl_prim_desc *pClPDecs;
+	rt_prim_desc *pClPDecs;
 	void *memPtr;
 	
 	if ( (pRp == NULL) || (pPrim == NULL) )
 		exit( -1 );
 
-	if ( (pRp->primsCount + 1) > PRIMS_IN_BLOCK * pRp->prim_decs_blocks )
-		rt_add_block( pRp, sizeof(rt_cl_prim_desc) * PRIMS_IN_BLOCK,
-			 sizeof(rt_cl_prim_desc), &(pRp->prim_decs_blocks), 
+	if ( (pRp->primsCount + 1) > PRIMS_IN_BLOCK * pRp->primDecsBlocks )
+		rt_add_block( pRp, sizeof(rt_prim_desc) * PRIMS_IN_BLOCK,
+			 sizeof(rt_prim_desc), &(pRp->primDecsBlocks), 
 			 &(pRp->mempdecs) );
 		
 	pClPDecs = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->mempdecs, 
 		CL_TRUE, CL_MAP_WRITE, 
-		sizeof(rt_cl_prim_desc) * (pRp->primsCount), 
-		sizeof(rt_cl_prim_desc), 0, NULL, NULL, NULL );
+		sizeof(rt_prim_desc) * (pRp->primsCount), 
+		sizeof(rt_prim_desc), 0, NULL, NULL, NULL );
 
 	pClPDecs->pt = pt;
 	pClPDecs->offset = pRp->primsEnd;
@@ -147,9 +235,9 @@ void rt_render_pipe_add_primitive( rt_render_pipe *pRp, void *pPrim,
 	{
 	case RT_PT_SPHERE:
 		if ( (pRp->primsEnd + sizeof(rt_sphere)) 
-				>= PRIMS_BLOCK_SIZE * pRp->prim_blocks )
+				>= PRIMS_BLOCK_SIZE * pRp->primBlocks )
 			rt_add_block( pRp, PRIMS_BLOCK_SIZE, sizeof(rt_sphere), 
-				&(pRp->prim_blocks),  &(pRp->memp) );
+				&(pRp->primBlocks),  &(pRp->memp) );
 
 		memPtr = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->memp, CL_TRUE, 
 			CL_MAP_WRITE, pRp->primsEnd, sizeof(rt_sphere), 
@@ -177,15 +265,15 @@ void rt_render_pipe_add_triangles( rt_render_pipe *pRp,
 		exit( -1 );
 	
 	if ( (pRp->trianglesCount + tCount)
-			>= TRIANGLES_IN_BLOCK * pRp->triangle_blocks )
+			>= TRIANGLES_IN_BLOCK * pRp->triangleBlocks )
 		rt_add_block( pRp, TRIANGLES_IN_BLOCK * sizeof(rt_triangle), 
-			sizeof(rt_triangle) * tCount,  &(pRp->triangle_blocks),
+			sizeof(rt_triangle) * tCount,  &(pRp->triangleBlocks),
 			&(pRp->memt) );
 	
 	if ( (pRp->vertexCount + vCount) >= VERTEX_IN_BLOCK
-		* pRp->vertex_blocks)
+		* pRp->vertexBlocks)
 		rt_add_block( pRp, VERTEX_IN_BLOCK * sizeof(rt_vertex), 
-			sizeof(rt_vertex) * vCount,  &(pRp->vertex_blocks),
+			sizeof(rt_vertex) * vCount,  &(pRp->vertexBlocks),
 			&(pRp->memv) );
 	
 	clEnqueueWriteBuffer( pRp->oclContent.commQue, pRp->memv, 
@@ -209,11 +297,10 @@ void rt_render_pipe_add_material( rt_render_pipe *pRp, rt_material *pMat,
 	if ( (ind < 0) )
 		exit( -2 );
 
-	if ( ind >= MATERIALS_IN_BLOCK * pRp->material_blocks )
+	if ( ind >= MATERIALS_IN_BLOCK * pRp->materialBlocks )
 		rt_add_block( pRp, MATERIALS_IN_BLOCK * sizeof(rt_material), 
-			sizeof(rt_material),  &(pRp->material_blocks),
+			sizeof(rt_material),  &(pRp->materialBlocks),
 			&(pRp->memm) );
-
 
 	clEnqueueWriteBuffer( pRp->oclContent.commQue, pRp->memm, 
 		CL_TRUE, sizeof(rt_material) * ind, 
@@ -224,21 +311,21 @@ void rt_render_pipe_add_light( rt_render_pipe *pRp, void *pLight,
 	RT_LIGHT_TYPE lt )
 {
 	int err;
-	rt_cl_light_desc *pClLDecs;
+	rt_light_desc *pClLDecs;
 	void *memPtr;
 
 	if ( (pRp == NULL) || (pLight == NULL) )
 		exit( -1 );
 
-	if ( (pRp->lightsCount + 1) > LIGHTS_IN_BLOCK * pRp->light_decs_blocks )
+	if ( (pRp->lightsCount + 1) > LIGHTS_IN_BLOCK * pRp->lightDecsBlocks )
 		rt_add_block( pRp, sizeof(rt_light_desc) * LIGHTS_IN_BLOCK,
-			 sizeof(rt_light_desc), &(pRp->light_decs_blocks), 
+			 sizeof(rt_light_desc), &(pRp->lightDecsBlocks), 
 			 &(pRp->memldecs) );
 
 	pClLDecs = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->memldecs, 
 		CL_TRUE, CL_MAP_WRITE, 
-		sizeof(rt_cl_light_desc) * (pRp->lightsCount), 
-		sizeof(rt_cl_light_desc), 0, NULL, NULL, NULL );
+		sizeof(rt_light_desc) * (pRp->lightsCount), 
+		sizeof(rt_light_desc), 0, NULL, NULL, NULL );
 
 	pClLDecs->lt = lt;
 	pClLDecs->offset = pRp->lightsEnd;
@@ -250,9 +337,9 @@ void rt_render_pipe_add_light( rt_render_pipe *pRp, void *pLight,
 	{
 	case RT_LT_POINT:	
 		if ( (pRp->lightsEnd + sizeof(rt_point_light))
-			>= LIGHTS_BLOCK_SIZE * pRp->light_blocks )
+			>= LIGHTS_BLOCK_SIZE * pRp->lightBlocks )
 			rt_add_block( pRp, LIGHTS_BLOCK_SIZE, 
-				sizeof(rt_point_light), &(pRp->light_blocks),
+				sizeof(rt_point_light), &(pRp->lightBlocks),
 				&(pRp->meml) );
 
 		memPtr = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->meml, CL_TRUE, 
@@ -278,11 +365,28 @@ void rt_render_pipe_get_camera( rt_render_pipe *pRp, rt_camera **ppCam )
 	if ( pRp == NULL || ppCam == NULL )
 		exit(-1);
 
-	*ppCam = pRp->cam;
+	*ppCam = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->memc, 
+		CL_TRUE, CL_MAP_WRITE | CL_MAP_READ, 0, sizeof(rt_camera), 0,
+		NULL, NULL, NULL );
+}
+
+void rt_render_pipe_free_camera( rt_render_pipe *pRp, rt_camera *pC )
+{
+	if ( pRp == NULL || pC == NULL )
+		exit( -1 );
+
+	clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memc, pC, 0, 
+		NULL, NULL );
 }
 
 void rt_init_opencl( rt_render_pipe *pRp )
 {
+	cl_platform_id plID[5];
+	cl_uint plCount;
+	cl_device_id devID[5][5];
+	cl_uint devCount[5];
+	cl_program prog;
+
 	int i;
 	cl_int ret;
 		
@@ -298,33 +402,30 @@ void rt_init_opencl( rt_render_pipe *pRp )
 
 	rt_opencl_content *ocl = &(pRp->oclContent);
 
-	ret = clGetPlatformIDs( 5, ocl->plID, &(ocl->plCount) );	
-	for ( i = 0; i < ocl->plCount; ++i )
-		clGetDeviceIDs( ocl->plID[i], CL_DEVICE_TYPE_GPU, 5, 
-			(ocl->devID)[i], (ocl->devCount)+i );
+	ret = clGetPlatformIDs( 5, plID, &(plCount) );	
+	for ( i = 0; i < plCount; ++i )
+		clGetDeviceIDs( plID[i], CL_DEVICE_TYPE_GPU, 5, 
+			devID[i], devCount+i );
+
+	ocl->dev = devID[0][0];
 
 	{
 		char tmp[1024];
 
-		clGetPlatformInfo( ocl->plID[0], CL_PLATFORM_NAME, 
+		clGetPlatformInfo( plID[0], CL_PLATFORM_NAME, 
 			1024, tmp, NULL );
 		printf( "choosen platform: %s\n", tmp );
 		
-		clGetDeviceInfo( ocl->devID[0][0], CL_DEVICE_NAME,
+		clGetDeviceInfo( devID[0][0], CL_DEVICE_NAME,
 			1024, tmp, NULL );
 		
 		printf( "choosen device: %s\n", tmp );
-
-		clGetDeviceInfo( ocl->devID[0][0], CL_DEVICE_MAX_COMPUTE_UNITS,
-			sizeof(cl_uint), &(ocl->computeUnitsCount), NULL );
-
-		printf( "compute units count: %u\n", ocl->computeUnitsCount );
 	}
 	
-	ocl->context = clCreateContext( NULL, 1, (ocl->devID)[0], NULL, 
+	ocl->context = clCreateContext( NULL, 1, devID[0], NULL, 
 		NULL, &ret );
 	ocl->commQue = clCreateCommandQueue( ocl->context, 
-		(ocl->devID)[0][0], 0, &ret );
+		devID[0][0], 0, &ret );
 
 	
 	fp = fopen( rt_cl_raytrace_kernel_path, "r" );
@@ -339,7 +440,7 @@ void rt_init_opencl( rt_render_pipe *pRp )
 	progsrcsz = fread( progsrc, sizeof(char), 0x10000000, fp );
 	fclose( fp );
 
-	ocl->prog = clCreateProgramWithSource( ocl->context, 1, 
+	prog = clCreateProgramWithSource( ocl->context, 1, 
 		(const char **)(&progsrc), 
 		(const size_t *)(&progsrcsz), &ret );
 
@@ -349,11 +450,10 @@ void rt_init_opencl( rt_render_pipe *pRp )
 		exit( -3 );
 	}
 
-
 	strcpy( clArgs, "-I " );
 	strcat( clArgs, rt_cl_include_path );
 	
-	ret = clBuildProgram( ocl->prog, 1, (ocl->devID)[0],
+	ret = clBuildProgram( prog, 1, devID[0],
 		clArgs, NULL, NULL );
 
 	if ( ret != CL_SUCCESS )
@@ -361,12 +461,12 @@ void rt_init_opencl( rt_render_pipe *pRp )
 	    	size_t log_size;
    		char *log;
     			
-		clGetProgramBuildInfo( ocl->prog, (ocl->devID)[0][0],
+		clGetProgramBuildInfo( prog, devID[0][0],
 			CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size );
 
    		log = (char *) malloc(log_size);
 
-    		clGetProgramBuildInfo( ocl->prog, (ocl->devID)[0][0],
+    		clGetProgramBuildInfo( prog, devID[0][0],
 			CL_PROGRAM_BUILD_LOG, log_size, log, NULL );
 
 		printf( "clBuildProgram fail:\n" );
@@ -375,76 +475,15 @@ void rt_init_opencl( rt_render_pipe *pRp )
 		exit( -3 );
 	}
 	
-	ocl->raytrace = clCreateKernel( ocl->prog, "raytrace", &ret );
-
-	{
-		size_t maxSz;
-
-		clGetDeviceInfo( ocl->devID[0][0], 
-			CL_DEVICE_MAX_WORK_GROUP_SIZE, 
-			sizeof(size_t), &maxSz, NULL );
-
-		ocl->workGroupSz[0] = (size_t) sqrt( maxSz );
-		ocl->workGroupSz[1] = (size_t) sqrt( maxSz );
-
-		ocl->workGroupSz[0] *= ((float)pRp->w < (float)pRp->h) ? 
-			((float)pRp->w / (float)pRp->h) : 1.0f; 
-		ocl->workGroupSz[1] *= ((float)pRp->h < (float)pRp->w) ? 
-			((float)pRp->h / (float)pRp->w) : 1.0f;
-
-
-		if ( !(is_power_of_two_size_t(ocl->workGroupSz[0]) 
-			&& is_power_of_two_size_t(ocl->workGroupSz[1])) )
-		{
-			size_t *minSz = NULL, *maxSz = NULL;
-			size_t maxSzPos = 0, minSzPos = 0;
-			size_t mask;
-
-			if ( ocl->workGroupSz[0] > ocl->workGroupSz[1] )
-			{
-				minSz = ocl->workGroupSz + 1;
-				maxSz = ocl->workGroupSz;
-			}
-			else
-			{
-				minSz = ocl->workGroupSz;
-				maxSz = ocl->workGroupSz + 1;
-			}
-
-			*maxSz <<= 1;
-				
-			mask = (size_t)(1) << (8 * sizeof( size_t ) - 1);
-				
-			while ( !(*maxSz & mask) )
-			{
-				mask >>= 1;
-				++maxSzPos;
-			}
-				
-			mask = (size_t)(1) << (8 * sizeof( size_t ) - 1);
-				
-			while ( !(*minSz & mask) )
-			{
-				mask >>= 1;
-				++minSzPos;
-			}
-
-			*minSz >>= 8 * sizeof(size_t) - minSzPos - 1;
-			*minSz <<= 8 * sizeof(size_t) - minSzPos - 1;
-
-			*maxSz >>= 8 * sizeof(size_t) - maxSzPos - 1;
-			*maxSz <<= 8 * sizeof(size_t) - maxSzPos - 1;
-		}	
-	}
+	ocl->raytrace = clCreateKernel( prog, "raytrace", &ret );
 }
 
-void rt_opencl_render( rt_render_pipe *pRp )
+void rt_opencl_render( rt_render_pipe *pRp, rt_box *pBoundingBox,
+	cl_mem *memi, cl_mem *memn )
 {
-	rt_cl_raytrace_args *rtArgs;
-	void *memPtr;
+	rt_raytrace_args *rtArgs;
 	rt_opencl_content *pOcl = &(pRp->oclContent);
 	cl_mem mema;
-	cl_mem memc;
 	cl_mem memout;
 
 	if ( pRp == NULL )
@@ -452,36 +491,23 @@ void rt_opencl_render( rt_render_pipe *pRp )
 
 	// first arg
 	mema = clCreateBuffer( pOcl->context, CL_MEM_READ_ONLY, 
-		sizeof(rt_cl_raytrace_args), NULL, NULL );
+		sizeof(rt_raytrace_args), NULL, NULL );
 
 	rtArgs = clEnqueueMapBuffer( pOcl->commQue, mema, CL_TRUE, CL_MAP_WRITE, 0, 
-		sizeof(rt_cl_raytrace_args), 0, NULL, NULL, NULL );
+		sizeof(rt_raytrace_args), 0, NULL, NULL, NULL );
 	
 	rtArgs->primsCount = pRp->primsCount;
 	rtArgs->trianglesCount = pRp->trianglesCount;
 	rtArgs->vertexCount = pRp->vertexCount;
 	rtArgs->lightsCount = pRp->lightsCount;
-	rtArgs->fillCol = pRp->fillCol;
 	rtArgs->w = pRp->w;
 	rtArgs->h = pRp->h;
 	rtArgs->xdelta = 1;
 	rtArgs->ydelta = 1;
 
-	rtArgs->boundingBox = pRp->boundingBox;
+	rtArgs->boundingBox = *pBoundingBox;
 
 	clEnqueueUnmapMemObject( pOcl->commQue, mema, rtArgs, 0, 
-		NULL, NULL );
-
-	// sixth arg
-	memc = clCreateBuffer( pOcl->context, CL_MEM_READ_ONLY, 
-		sizeof(rt_camera), NULL, NULL );
-
-	memPtr = clEnqueueMapBuffer( pOcl->commQue, memc, CL_TRUE, CL_MAP_WRITE, 0, 
-		sizeof(rt_camera), 0, NULL, NULL, NULL );
-
-	memcpy( memPtr, pRp->cam, sizeof(rt_camera) );
-
-	clEnqueueUnmapMemObject( pOcl->commQue, memc, memPtr, 0, 
 		NULL, NULL );
 
 	// output arg
@@ -503,7 +529,7 @@ void rt_opencl_render( rt_render_pipe *pRp )
 		clSetKernelArg( pOcl->raytrace, 4, 
 			sizeof(cl_mem), (void *) &(pRp->memldecs) );
 		clSetKernelArg( pOcl->raytrace, 5,
-			sizeof(cl_mem), (void *) &memc );
+			sizeof(cl_mem), (void *) &(pRp->memc) );
 		clSetKernelArg( pOcl->raytrace, 6,
 			sizeof(cl_mem), (void *) &(pRp->memm) );
 		clSetKernelArg( pOcl->raytrace, 7,
@@ -511,9 +537,9 @@ void rt_opencl_render( rt_render_pipe *pRp )
 		clSetKernelArg( pOcl->raytrace, 8,
 			sizeof(cl_mem), (void *) &(pRp->memv) );
 		clSetKernelArg( pOcl->raytrace, 9,
-			sizeof(cl_mem), (void *) &(pRp->memn) );
+			sizeof(cl_mem), (void *) memn );
 		clSetKernelArg( pOcl->raytrace, 10,
-			sizeof(cl_mem), (void *) &(pRp->memi) );
+			sizeof(cl_mem), (void *) memi );
 		clSetKernelArg( pOcl->raytrace, 11,
 			sizeof(cl_mem), (void *) &memout );
 
@@ -526,7 +552,6 @@ void rt_opencl_render( rt_render_pipe *pRp )
 		0, NULL, NULL );
 
 	clReleaseMemObject( mema );	
-	clReleaseMemObject( memc );	
 	clReleaseMemObject( memout );
 }
 
@@ -535,7 +560,6 @@ void rt_render_pipe_cleanup( rt_render_pipe *pRp )
 	if ( pRp == NULL )
 		exit( -1 );
 
-	free( pRp->cam );
 	free( pRp->screenData );
 
 	clReleaseMemObject( pRp->memp );	
@@ -559,6 +583,9 @@ void *rt_compute_sah_help_thread( void *pArgs )
 		extents_xz_area = args->pBox->extents.x * args->pBox->extents.z;
 
 	rt_vertex *memVer = args->memVer;
+
+	if ( pArgs == NULL )
+		exit( -1 );
 
 	switch ( args->axis )
 	{
@@ -736,6 +763,11 @@ void rt_kdtree_compute_sah( rt_ulong *memTp, rt_triangle *memTr,
 	float delta;
 	int i;
 	
+	if ( (memTp == NULL) || (memTr == NULL) || (memVer == NULL)
+		|| (pBox == NULL) || (primsCountL == NULL)
+		|| (primsCountR == NULL) || (pSep == NULL) )
+		exit( -1 );
+
 	switch ( axis )
 	{
 	case RT_AXIS_X:
@@ -805,9 +837,6 @@ void rt_kdtree_compute_sah( rt_ulong *memTp, rt_triangle *memTr,
 			free(rets[i]);
 		free(rets);
 	}
-
-//	printf( "%lu %lu %f\n", *primsCountL, *primsCountR, *pSep );
-//	exit(2);
 }
 
 //with destruction
@@ -816,6 +845,10 @@ rt_kdtree_count_info rt_kdtree_pack_to_buffer( rt_cl_kdtree_node *pNodeBuf,
 	rt_ulong writePos, rt_ulong primsWritePos )
 {
 	rt_kdtree_count_info leftChilds, rightChilds;
+
+	if ( (pNodeBuf == NULL) || (pPrimsIdxBuf == NULL) 
+		|| (pNode == NULL) )
+		exit( -1 );
 
 	pNodeBuf[writePos].isLast = pNode->isLast;
 
@@ -848,7 +881,6 @@ rt_kdtree_count_info rt_kdtree_pack_to_buffer( rt_cl_kdtree_node *pNodeBuf,
 	pNodeBuf[writePos].leftNode = writePos + 1;
 	pNodeBuf[writePos].rightNode = writePos + leftChilds.nodesCount + 1;
 
-
 	free( pNode );
 
 	{
@@ -871,6 +903,10 @@ rt_kdtree_count_info rt_kdtree_make_childs( rt_vertex *memVer, rt_triangle *memT
 	rt_ulong i, j, k;
 	rt_box tmpBoxL, tmpBoxR;
 	
+	if ( (memVer == NULL) || (memTr == NULL)
+		|| (pNode == NULL) || (bbox == NULL) )
+		exit( -1 );
+
 	// cheking conditions for end of recursion
 	if ( pNode->primsCount <= MAX_PRIMS_IN_NODE 
 		|| depth == MAX_DEPTH )
@@ -1037,7 +1073,8 @@ rt_kdtree_count_info rt_kdtree_make_childs( rt_vertex *memVer, rt_triangle *memT
 	}
 }
 
-void rt_kdtree_build( rt_render_pipe *pRp )
+void rt_kdtree_build( rt_render_pipe *pRp, rt_box *pBoundingBox,
+	cl_mem *memi, cl_mem *memn )
 {
 	rt_triangle *memTr = malloc( sizeof(rt_triangle) * pRp->trianglesCount );
 	rt_vertex *memVer = malloc( sizeof(rt_vertex) * pRp->vertexCount );
@@ -1047,14 +1084,9 @@ void rt_kdtree_build( rt_render_pipe *pRp )
 	rt_ulong nodesCount;
 	rt_kdtree_node *rootNode = malloc( sizeof(rt_kdtree_node) );
 
-	// mapping vertex and triangles into host memory
-/*	memTr = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->memt, 
-		CL_TRUE, CL_MAP_WRITE, 0, sizeof(rt_triangle) 
-		* (pRp->trianglesCount), 0, NULL, NULL, NULL );
-	memVer = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->memv, 
-		CL_TRUE, CL_MAP_WRITE, 0, sizeof(rt_verticle) 
-		* (pRp->vertexCount), 0, NULL, NULL, NULL );
-*/
+	if ( pRp == NULL )
+		exit( -1 );
+
 	clEnqueueReadBuffer( pRp->oclContent.commQue, pRp->memt, CL_TRUE, 0, 
 		sizeof(rt_vertex) * pRp->trianglesCount, memTr, 
 		0, NULL, NULL );
@@ -1062,7 +1094,6 @@ void rt_kdtree_build( rt_render_pipe *pRp )
 	clEnqueueReadBuffer( pRp->oclContent.commQue, pRp->memv, CL_TRUE, 0, 
 		sizeof(rt_vertex) * pRp->vertexCount, memVer, 
 		0, NULL, NULL );
-
 
 	// making bounding box
 	for ( i = 0; i < pRp->vertexCount; ++i )
@@ -1080,13 +1111,13 @@ void rt_kdtree_build( rt_render_pipe *pRp )
 	minP.x -= 1.0f; minP.y -= 1.0f; minP.z -= 1.0f;
 	maxP.x += 1.0f; maxP.y += 1.0f; maxP.z += 1.0f;
 
-	rt_vector3_add( &maxP, &minP, &(pRp->boundingBox.center) );
-	rt_vector3_scalar_mult( &(pRp->boundingBox.center), 0.5f, 
-		&(pRp->boundingBox.center) );
+	rt_vector3_add( &maxP, &minP, &(pBoundingBox->center) );
+	rt_vector3_scalar_mult( &(pBoundingBox->center), 0.5f, 
+		&(pBoundingBox->center) );
 
-	rt_vector3_sub( &minP, &maxP, &(pRp->boundingBox.extents) );
-	rt_vector3_scalar_mult( &(pRp->boundingBox.extents), 0.5f, 
-		&(pRp->boundingBox.extents) );
+	rt_vector3_sub( &minP, &maxP, &(pBoundingBox->extents) );
+	rt_vector3_scalar_mult( &(pBoundingBox->extents), 0.5f, 
+		&(pBoundingBox->extents) );
 
 	// creating nodes
 	rootNode->prims = malloc( sizeof(rt_triangle) * pRp->trianglesCount );	
@@ -1109,7 +1140,7 @@ void rt_kdtree_build( rt_render_pipe *pRp )
 		rootNode->isLast = 0;
 
 		tmpCntI = rt_kdtree_make_childs( memVer, memTr, 
-			rootNode, &(pRp->boundingBox), 0 );
+			rootNode, pBoundingBox, 0 );
 
 		primsInNodesCount = tmpCntI.primsCount;
 		nodesCount = tmpCntI.nodesCount;
@@ -1120,31 +1151,24 @@ void rt_kdtree_build( rt_render_pipe *pRp )
 	free( memVer );
 	memVer = NULL;
 
-	// unmapping
-/*	clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memv, memVer, 0, 
-		NULL, NULL );
-	clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memt, memTr, 0, 
-		NULL, NULL );
-*/
-
 	// packing nodes into OpenCL buffers 
 	{
 		rt_cl_kdtree_node *memNode;
 		rt_ulong *memTrIdx;
 
-		pRp->memi = clCreateBuffer( pRp->oclContent.context, 
+		*memi = clCreateBuffer( pRp->oclContent.context, 
 			CL_MEM_READ_ONLY, sizeof(rt_ulong) * primsInNodesCount, 
 			NULL, NULL );
-		pRp->memn = clCreateBuffer( pRp->oclContent.context, 
+		*memn = clCreateBuffer( pRp->oclContent.context, 
 			CL_MEM_READ_ONLY, 
 			sizeof(rt_cl_kdtree_node) * nodesCount, NULL, NULL );
 
 		memNode = clEnqueueMapBuffer( pRp->oclContent.commQue, 
-			pRp->memn, CL_TRUE, CL_MAP_WRITE, 0, 
+			*memn, CL_TRUE, CL_MAP_WRITE, 0, 
 			sizeof(rt_cl_kdtree_node) * nodesCount, 
 			0, NULL, NULL, NULL );
 		memTrIdx = clEnqueueMapBuffer( pRp->oclContent.commQue, 
-			pRp->memi, CL_TRUE, CL_MAP_WRITE, 0, 
+			*memi, CL_TRUE, CL_MAP_WRITE, 0, 
 			sizeof(rt_ulong) * primsInNodesCount, 
 			0, NULL, NULL, NULL );
 
@@ -1159,9 +1183,9 @@ void rt_kdtree_build( rt_render_pipe *pRp )
 		rt_cl_dout_kdtree( memVer, memTr, memNode, memTrIdx, pRp, 0, 0 );
 		exit(1);
 */
-		clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memn, 
+		clEnqueueUnmapMemObject( pRp->oclContent.commQue, *memn, 
 			memNode, 0, NULL, NULL );
-	 	clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memi, 
+	 	clEnqueueUnmapMemObject( pRp->oclContent.commQue, *memi, 
 			memTrIdx, 0, NULL, NULL );
 	}
 
@@ -1172,11 +1196,15 @@ rt_argb *rt_render_pipe_draw( rt_render_pipe *pRp )
 	if ( pRp == NULL )
 		exit( -1 );
 
-	rt_kdtree_build( pRp );
-	rt_opencl_render( pRp );
+	rt_box bbox;
+	cl_mem memi;
+	cl_mem memn;
 
-	clReleaseMemObject( pRp->memi );
-	clReleaseMemObject( pRp->memn );
+	rt_kdtree_build( pRp, &bbox, &memi, &memn );
+	rt_opencl_render( pRp, &bbox, &memi, &memn  );
+
+	clReleaseMemObject( memi );
+	clReleaseMemObject( memn );
 
 	pRp->trianglesCount = 0;
 	pRp->vertexCount = 0;

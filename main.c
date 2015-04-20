@@ -253,15 +253,30 @@ void keyPress( GtkWidget *w, GdkEvent *e, gpointer usrData )
 		gtk_widget_queue_draw(mainWindow);
 	}
 
+
+	rt_render_pipe_free_camera( &renderPipe, cam );
 }
 void resizeImage()
 {
 	GtkAllocation alloc;
+	rt_camera *cam = NULL;
+
 	
 	gtk_widget_get_allocation( drawArea, &alloc );
 
 	w = alloc.width;
 	h = alloc.height;
+
+	csur = cairo_image_surface_create( CAIRO_FORMAT_RGB24, w, h );
+	data = (rt_argb *) cairo_image_surface_get_data( csur );
+
+	rt_render_pipe_get_camera( &renderPipe, &cam );
+	rt_matrix4_create_projection( &(cam->viewToPersp), (float)w/(float)h,
+		0.125*M_PI );
+
+	rt_render_pipe_free_camera( &renderPipe, cam );
+
+	rt_render_pipe_set_image_size( &renderPipe, w, h );
 }
 
 void buildPlaneOfTriangles()
@@ -446,7 +461,7 @@ void draw( GtkWidget *wgt, cairo_t *cr, gpointer ud )
 
 	//draw to buffer
 	renderedImage = rt_render_pipe_draw( &renderPipe );
-	memcpy( data, renderedImage, sizeof(rt_argb) * WIDTH * HEIGHT );
+	memcpy( data, renderedImage, sizeof(rt_argb) * w * h );
 	
 	//draw buffer to screen
 	if ( RENDER_TO_SCREEN )
@@ -491,18 +506,19 @@ int main( int argc, char *argv[] )
 	srand(time(0));
 	
 	//create surface for render
-	csur = cairo_image_surface_create( CAIRO_FORMAT_RGB24, WIDTH, HEIGHT );
-	data = (rt_argb *) cairo_image_surface_get_data( csur );
 	w = WIDTH;
 	h = HEIGHT;
+
+	csur = cairo_image_surface_create( CAIRO_FORMAT_RGB24, w, h );
+	data = (rt_argb *) cairo_image_surface_get_data( csur );
 
 	//init rt
 	rt_init( *argv );
 
 	//initiliaze render pipe
-	rt_camera_create( &frust, (float)WIDTH / (float)HEIGHT, 0.125*M_PI );
+	rt_camera_create( &frust, (float)w / (float)w, 0.125*M_PI );
 
-	rt_render_pipe_create( &renderPipe, WIDTH, HEIGHT );
+	rt_render_pipe_create( &renderPipe, w, h );
 
 	rt_render_pipe_set_camera( &renderPipe, &frust );
 
@@ -559,30 +575,37 @@ int main( int argc, char *argv[] )
 	for ( i = 0; i < POINT_LIGHTS_COUNT; ++i )
 		rt_point_light_create( lt+i, v, 100.0f, col );
 
-	//set camera position
-	renderPipe.cam->world._11 = 1.0f;          
-	renderPipe.cam->world._12 = 0.0f;          
-	renderPipe.cam->world._13 = 0.0f;          
-	renderPipe.cam->world._14 = 0.0f;          
+	{
+		rt_camera *cam = NULL;
+		rt_render_pipe_get_camera( &renderPipe, &cam );
+
+		//set camera position
+		cam->world._11 = 1.0f;          
+		cam->world._12 = 0.0f;          
+		cam->world._13 = 0.0f;          
+		cam->world._14 = 0.0f;          
 		                                   
-	renderPipe.cam->world._21 = 0.0f;          
-	renderPipe.cam->world._22 = 0.968582f;     
-	renderPipe.cam->world._23 = -0.248690f;    
-	renderPipe.cam->world._24 = 0.0f;          
+		cam->world._21 = 0.0f;          
+		cam->world._22 = 0.968582f;     
+		cam->world._23 = -0.248690f;    
+		cam->world._24 = 0.0f;          
                                                    
-	renderPipe.cam->world._31 = 0.0f;          
-	renderPipe.cam->world._32 = 0.248690f;     
-	renderPipe.cam->world._33 = 0.968582f;     
-	renderPipe.cam->world._34 = 0.0f;          
+		cam->world._31 = 0.0f;          
+		cam->world._32 = 0.248690f;     
+		cam->world._33 = 0.968582f;     
+		cam->world._34 = 0.0f;          
 		                                   
-	renderPipe.cam->world._41 = 0.0f;          
-	renderPipe.cam->world._42 = -12.0f;        
-	renderPipe.cam->world._43 = -43.0f;        
-	renderPipe.cam->world._44 = 1.0f;          
+		cam->world._41 = 0.0f;          
+		cam->world._42 = -12.0f;        
+		cam->world._43 = -43.0f;        
+		cam->world._44 = 1.0f;          
                                                    
-	camPos.x = 0.0f;           
-	camPos.y = 12.0f;          
-	camPos.z = 43.0f;          
+		camPos.x = 0.0f;           
+		camPos.y = 12.0f;          
+		camPos.z = 43.0f; 
+	
+		rt_render_pipe_free_camera( &renderPipe, cam );
+	}
 
 	{
 		rt_ulong vertexOffset = SQUARES_COUNT_SQRT 
@@ -627,9 +650,6 @@ int main( int argc, char *argv[] )
 		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 1].mat = SPHERE_COUNT + 1;
 
 
-
-
-
 		rt_vector3_create( &(vx[vertexOffset + 4].pos),
 			-plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f );
 		rt_vector3_create( &(vx[vertexOffset + 5].pos),
@@ -657,7 +677,6 @@ int main( int argc, char *argv[] )
 		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 3].pV1 = vertexOffset + 6;
 		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 3].pV2 = vertexOffset + 5;
 		tr[SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2 + 3].mat = SPHERE_COUNT + 1;
-
 
 
 		rt_vector3_create( &(vx[vertexOffset + 8].pos),
@@ -774,8 +793,8 @@ int main( int argc, char *argv[] )
 	g_signal_connect( mainWindow, "destroy",
 		G_CALLBACK(windowDestroy), NULL );
 	
+	gtk_window_resize( GTK_WINDOW(mainWindow), w, h );
 	gtk_widget_show_all(mainWindow);
-	gtk_window_resize( GTK_WINDOW(mainWindow), WIDTH, HEIGHT );
 
 	gtk_main();
 

@@ -15,13 +15,21 @@ char *rt_cl_raytrace_kernel_path;
 void rt_init( char *path );
 
 void rt_init_opencl( rt_render_pipe *pRp );
+
 void rt_init_buffers( rt_render_pipe *pRp );
+
 void rt_render_pipe_create( rt_render_pipe *pRp, int w, int h );
+
+void rt_render_pipe_calc_wg_size( rt_render_pipe *pRp, int w, int h );
+
+void rt_render_pipe_set_image_size( rt_render_pipe *pRp, int w, int h );
+
 void rt_render_pipe_reset_blocks( rt_render_pipe *pRp );
 
 void rt_render_pipe_set_camera( rt_render_pipe *pRp, 
 	rt_camera *pFr );
 void rt_render_pipe_get_camera( rt_render_pipe *pRp, rt_camera **ppC );
+void rt_render_pipe_free_camera( rt_render_pipe *pRp, rt_camera *pC );
 
 void rt_add_block( rt_render_pipe *pRp, size_t blockSize, size_t nededSize,
 	rt_ulong *curBlocksCount, cl_mem *buf );
@@ -50,7 +58,11 @@ rt_kdtree_count_info rt_kdtree_pack_to_buffer( rt_cl_kdtree_node *pNodeBuf,
 	rt_ulong *pPrimsIdxBuf, rt_kdtree_node *pNode, 
 	rt_ulong writePos, rt_ulong primsWritePos );
 
-void rt_kdtree_build( rt_render_pipe *pRp );
+void rt_kdtree_build( rt_render_pipe *pRp, rt_box *pBoundingBox,
+	cl_mem *memi, cl_mem *memn );
+
+void rt_opencl_render( rt_render_pipe *pRp, rt_box *pBoundingBox,
+	cl_mem *memi, cl_mem *memn );
 
 rt_argb *rt_render_pipe_draw( rt_render_pipe *pRp );
 

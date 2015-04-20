@@ -124,7 +124,8 @@ inline int rt_ray_triangle_intersection( rt_cl_render_pipe_data *pRp,
 	p = cross( pRay->dest, e2 );
 	det = dot( e1, p );
 		
-	if ( (det > -EPSILON) && (det < EPSILON) )
+	//if ( (det > -EPSILON) && (det < EPSILON) )
+	if ( isequal(det, 0.0f) )
 		return 0;
 	
 	det = 1.0f / det;

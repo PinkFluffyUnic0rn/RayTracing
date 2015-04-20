@@ -5,7 +5,6 @@
 #include "CL/rt_funcs_math.cl"
 #include "CL/rt_intersection.cl"
 
-
 inline ulong rt_primitive_get_material( rt_cl_render_pipe_data *pRp, 
 	ulong prN )
 {

@@ -3,11 +3,11 @@
 #include "CL/rt_intersection.cl"
 #include "CL/rt_funcs_primitives.cl"
 
-__kernel void raytrace( __constant rt_cl_raytrace_args *a,
+__kernel void raytrace( __constant rt_raytrace_args *a,
 			__global const void *prims,
-			__global const rt_cl_prim_desc *pd, 
+			__global const rt_prim_desc *pd, 
 			__global const void *lights,
-			__global const rt_cl_light_desc *ld, 
+			__global const rt_light_desc *ld, 
 			__constant rt_camera *cams,
 			__global const rt_material *materials,
 			__global const rt_triangle *triangles,
@@ -28,7 +28,10 @@ __kernel void raytrace( __constant rt_cl_raytrace_args *a,
 	float yTr = 2.0f/(float)(a->h-1);
 	
 	pRpData.boundingBox = a->boundingBox;
-	pRpData.fillCol = a->fillCol;
+	pRpData.fillCol.a = 1.0f;
+	pRpData.fillCol.r = 0.0f;
+	pRpData.fillCol.g = 0.0f;
+	pRpData.fillCol.b = 0.0f;
 	
 	pRpData.primsBuf = prims;
 	pRpData.primsDecs = pd;
