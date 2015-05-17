@@ -10,6 +10,7 @@
 #define ENV_OPT_DENSITY       1.0f
 
 #define SHADOWS_ENABLED       1
+#define AMBIENT_ENABLED       1
 #define DIFFUSE_ENABLED       1
 #define SPECULAR_ENABLED      1
 
@@ -130,7 +131,6 @@ typedef struct _rt_point_light
 typedef struct _rt_raytrace_args
 {	
 	rt_box boundingBox;
-	rt_color fillCol;
 	ulong primsCount;
 	ulong trianglesCount;
 	ulong vertexCount;

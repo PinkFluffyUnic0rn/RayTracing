@@ -10,12 +10,13 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include "rt.h"
 
 #define SPHERE_COUNT           10
 #define POINT_LIGHTS_COUNT     1
-#define SQUARES_COUNT_SQRT     50
+#define SQUARES_COUNT_SQRT     150
 #define BOTTOM                 1
 
 #define MATERIAL_COUNT         2 + SPHERE_COUNT
@@ -24,8 +25,8 @@
 #define RENDER_TO_SCREEN       1
 #define PNGS_PATH              "pngs/"
 
-#define WIDTH                  1280
-#define HEIGHT                 640
+#define WIDTH                  1280 //1920
+#define HEIGHT                 768  //1080
 
 typedef struct _wave
 {
@@ -83,6 +84,20 @@ int rotStep( gpointer data )
 
 void windowDestroy( GtkWidget *wgt, gpointer u )
 {
+	if ( RENDER_TO_PNGS )
+	{
+		int save = open( "save", O_TRUNC | O_CREAT | O_WRONLY, 
+			S_IRWXU | S_IRWXG | S_IRWXO );
+
+		write( save, (void *)(&t), sizeof(rt_float) );
+		write( save, (void *)(&dT), sizeof(rt_float) );
+		write( save, (void *)(&pngN), sizeof(unsigned long int) );
+
+		close(save);
+	}
+	else
+		printf( "t = %1.10f, dT = %1.10f\n", t, dT );
+
 	g_source_remove( rotTID );
 }
 
@@ -290,7 +305,7 @@ void buildPlaneOfTriangles()
 	int pointsInRow = SQUARES_COUNT_SQRT+1;
 
 	rt_color_create( col, 0.5f, 0.223f, 0.345f, 0.474f );   //color
-	rt_color_create( col+1, 0.0f, 1.0f, 1.0f, 1.0f );       //ambient
+	rt_color_create( col+1, 0.0f, 0.05f, 0.05f, 0.05f );       //ambient
 	rt_color_create( col+2, 0.0f, 0.5f, 0.5f, 0.5f );       //diffuse
 	rt_color_create( col+3, 3.5f, 0.25f, 0.25f, 0.25f );    //specular
 	rt_color_create( col+4, 0.0f, 0.3f, 0.3f, 0.3f );       //reflect
@@ -516,7 +531,7 @@ int main( int argc, char *argv[] )
 	rt_init( *argv );
 
 	//initiliaze render pipe
-	rt_camera_create( &frust, (float)w / (float)w, 0.125*M_PI );
+	rt_camera_create( &frust, (float)w / (float)h, 0.125*M_PI );
 
 	rt_render_pipe_create( &renderPipe, w, h );
 
@@ -526,9 +541,19 @@ int main( int argc, char *argv[] )
 	if ( RENDER_TO_PNGS )
 	{
 		struct stat s = {0};
+		int save;
 
 		if ( stat( PNGS_PATH, &s ) == -1 )
 			mkdir( PNGS_PATH, S_IRWXU | S_IRWXG | S_IRWXO );
+
+		if ( (save = open( "save", O_RDONLY )) >= 0 )
+		{
+			read( save, (void *)(&t), sizeof(rt_float) );
+			read( save, (void *)(&dT), sizeof(rt_float) );
+			read( save, (void *)(&pngN), sizeof(unsigned long int) );
+			
+			t += dT;
+		}
 
 	}
 
@@ -538,7 +563,7 @@ int main( int argc, char *argv[] )
 	if ( SPHERE_COUNT > 0 )
 	{
 		rt_color_create( col, 0.5f, 0.0f, 0.5f, 1.0f );      //color
-		rt_color_create( col+1, 0.0f, 0.0f, 0.0f, 0.0f );    //ambient
+		rt_color_create( col+1, 0.0f, 0.05f, 0.05f, 0.05f );    //ambient
 		rt_color_create( col+2, 0.0f, 0.2f, 0.2f, 0.2f );    //diffuse
 		rt_color_create( col+3, 15.0f, 0.2f, 0.2f, 0.2f );   //specular
 		rt_color_create( col+4, 0.0f, 0.5f, 0.5f, 0.5f );    //reflect
@@ -556,9 +581,9 @@ int main( int argc, char *argv[] )
 			(rt_float)(rand()%16365)/16384.0f, 
 			(rt_float)(rand()%16365)/16384.0f, 
 			(rt_float)(rand()%16365)/16384.0f );
-		rt_color_create( col+1, 0.0f, 0.0f, 0.0f, 0.0f );    //ambient
+		rt_color_create( col+1, 0.0f, 0.05f, 0.05f, 0.05f ); //ambient
 		rt_color_create( col+2, 0.0f, 0.5f, 0.5f, 0.5f );    //diffuse
-		rt_color_create( col+3, 15.0f, 1.0f, 1.0f, 1.0f );   //specular
+		rt_color_create( col+3, 15.0f, 0.5f, 0.5f, 0.5f );   //specular
 		rt_color_create( col+4, 0.0f, 0.5f, 0.5f, 0.5f );    //reflect
 		rt_material_create( mt+1+i, col, col+1, col+2, 
 			col+3, col+4, 0.0f, 1.0f );
@@ -614,7 +639,7 @@ int main( int argc, char *argv[] )
 		float topHeight = 3.0f;
 	
 		rt_color_create( col, 1.0f, 1.0f, 1.0f, 1.0f );     //color
-		rt_color_create( col+1, 0.0f, 0.0f, 0.0f, 0.0f );   //ambient
+		rt_color_create( col+1, 0.0f, 0.05f, 0.05f, 0.05f );   //ambient
 		rt_color_create( col+2, 0.0f, 1.0f, 1.0f, 1.0f );   //diffuse
 		rt_color_create( col+3, 5.0f, 1.0f, 1.0f, 1.0f );   //specular
 		rt_color_create( col+4, 0.0f, 0.0f, 0.0f, 0.0f );   //reflect

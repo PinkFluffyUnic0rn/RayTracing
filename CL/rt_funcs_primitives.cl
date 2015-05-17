@@ -89,7 +89,6 @@ inline void rt_get_nearest_in_last( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 		
 		tmpT = (pRp->trianglesBuf)[primsOffset];
 		b = rt_ray_triangle_intersection( pRp, pR, &tmpT, &t, &u, &v );
-	
 
 		if ( b )
 		{
@@ -106,7 +105,6 @@ inline void rt_get_nearest_in_last( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 			}
 		}
 	}
-
 }
 
 /*
@@ -157,7 +155,6 @@ inline void rt_get_nearest_triangle( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 	float stackFar[KDTREE_DEPTH];
 	int stackPos = 0;
 
-
 	if ( !rt_box_ray_intersection( &(pRp->boundingBox), pR, &tNear, &tFar ) )
 		return;
 
@@ -185,7 +182,6 @@ inline void rt_get_nearest_triangle( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 		{
 			float sep = pRp->kdtreeNodesBuf[currentNode].sep;	
 		
-
 			switch ( pRp->kdtreeNodesBuf[currentNode].axis )
 			{
 			case RT_AXIS_X:
@@ -204,7 +200,6 @@ inline void rt_get_nearest_triangle( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 
 			nearNode = pRp->kdtreeNodesBuf[currentNode].leftNode;
 			farNode = pRp->kdtreeNodesBuf[currentNode].rightNode;
-
 
 			switch ( pRp->kdtreeNodesBuf[currentNode].axis )
 			{
@@ -249,15 +244,13 @@ inline void rt_get_nearest_triangle( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 				currentNode = nearNode;
 				tFar = tSplit;
 			}
-			
 		}
 	}
-
 }
 
 
 inline void rt_add_alpha_in_last( rt_cl_render_pipe_data *pRp, rt_ray *pR, 
-	ulong nodeIdx, float d, float tFar, float *alpha)
+	ulong nodeIdx, float d, float tNear, float tFar, float *alpha)
 {
 	ulong i;
 	ulong sz = pRp->kdtreeNodesBuf[nodeIdx].primsCount;
@@ -273,13 +266,8 @@ inline void rt_add_alpha_in_last( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 		tmpT = (pRp->trianglesBuf)[primsOffset];
 		b = rt_ray_triangle_intersection( pRp, pR, &tmpT, &t, &u, &v );
 	
-
-		if ( b && (t < d) && (t < tFar) )
-		{
-			
+		if ( b && (t < d) && (t < tFar) && (t > tNear) )
 			*alpha += pRp->materialBuf[pRp->trianglesBuf[primsOffset].mat].color.a;
-
-		}
 	}
 }
 
@@ -294,7 +282,8 @@ inline void rt_get_alpha_triangles( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 	int stackPos = 0;
 
 
-	if ( !rt_box_ray_intersection( &(pRp->boundingBox), pR, &tNear, &tFar ) )
+	if ( !rt_box_ray_intersection( &(pRp->boundingBox), 
+			pR, &tNear, &tFar ) )
 		return;
 
 	*alpha = 0.0f;
@@ -303,11 +292,8 @@ inline void rt_get_alpha_triangles( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 	{
 		if ( pRp->kdtreeNodesBuf[currentNode].isLast )
 		{
-			rt_add_alpha_in_last( pRp, pR, currentNode, d, tFar, alpha );
-
-// same primitive can be placed into several nodes,
-// need to check this probability, when summing alphas
-// shadows for triangles disabled in "rt_light_point" function
+			rt_add_alpha_in_last( pRp, pR, currentNode, d, tNear,
+				tFar, alpha );
 			
 			if ( stackPos )
 			{
@@ -473,6 +459,7 @@ inline void rt_light_point( rt_cl_render_pipe_data *pRp, rt_vector3 *pV,
 			float ang;
 			rt_color diffuse;
 			rt_color specular;
+			rt_color ambient;
 			float shadowed = 0.0f;
 
 			rt_color_create( &specular, 0.0f, 0.0f, 0.0f, 0.0f );
@@ -504,11 +491,19 @@ inline void rt_light_point( rt_cl_render_pipe_data *pRp, rt_vector3 *pV,
 				
 				shadowed = rt_clamp_float(a, 0.0f, 1.0f);
 
-//				rt_get_alpha_triangles( pRp, &shadowRay, d, &a ); 
+				rt_get_alpha_triangles( pRp, &shadowRay, d, &a ); 
 
-//				shadowed += rt_clamp_float(a, 0.0f, 1.0f);
+				shadowed += rt_clamp_float(a, 0.0f, 1.0f);
 				shadowed *= pMat->color.a;
 			}
+
+			if ( AMBIENT_ENABLED )
+				rt_color_mult( &(tmpL.col), &(pMat->ambient),
+					&ambient );
+			else
+				rt_color_create( &ambient,
+					0.0f, 0.0f, 0.0f, 0.0f );
+				
 
 			if ( DIFFUSE_ENABLED )
 			{
@@ -527,9 +522,6 @@ inline void rt_light_point( rt_cl_render_pipe_data *pRp, rt_vector3 *pV,
 					&diffuse );
 
 			}
-			else
-				rt_color_create( &diffuse, 0.0f, pMat->color.r,
-					pMat->color.g, pMat->color.b );
 
 			if ( SPECULAR_ENABLED )
 			{
@@ -554,12 +546,14 @@ inline void rt_light_point( rt_cl_render_pipe_data *pRp, rt_vector3 *pV,
 					&specular );
 
 				rt_color_scalar_mult( &specular, 
-					specFact, &specular );
+					specFact * (tmpL.rad) / d, &specular );
 			} 
 		
+			rt_color_add( &ambient, &diffuse, &diffuse );
 			rt_color_add( &diffuse, &specular, &tmpCol );
 			rt_color_scalar_mult( &tmpCol, 1.0f - shadowed, &tmpCol );
 			rt_color_add( &tmpCol, pCol, pCol );
+			rt_color_clamp( &pCol, &pCol );
 		}
 }
 /*

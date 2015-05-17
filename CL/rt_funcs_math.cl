@@ -30,10 +30,10 @@ void rt_matrix4_create_rotate( rt_matrix4 *pR, float ang,
 
 	case RT_AXIS_Y:
 		pR->_11 = cos(ang); pR->_12 = 0.0f;
-			pR->_13 = -sin(ang); pR->_14 = 0.0f;
+			pR->_13 = sin(ang); pR->_14 = 0.0f;
 		pR->_21 = 0.0f; pR->_22 = 1.0f;
 			pR->_23 = 0.0f; pR->_24 = 0.0f;
-		pR->_31 = sin(ang); pR->_32 = 0.0f; 
+		pR->_31 = -sin(ang); pR->_32 = 0.0f; 
 			pR->_33 = cos(ang); pR->_34 = 0.0f;
 		pR->_41 = 0.0f; pR->_42 = 0.0f;
 			pR->_43 = 0.0f; pR->_44 = 1.0f;

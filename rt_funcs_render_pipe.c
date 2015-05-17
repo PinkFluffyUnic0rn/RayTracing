@@ -895,9 +895,8 @@ rt_kdtree_count_info rt_kdtree_pack_to_buffer( rt_cl_kdtree_node *pNodeBuf,
 	}
 }
 
-rt_kdtree_count_info rt_kdtree_make_childs( rt_vertex *memVer, rt_triangle *memTr, 
-	rt_kdtree_node *pNode, rt_box *bbox, 
-	int depth )
+rt_kdtree_count_info rt_kdtree_make_childs( rt_vertex *memVer,
+	rt_triangle *memTr, rt_kdtree_node *pNode, rt_box *bbox, int depth )
 {
 	float range = bbox->extents.x;
 	rt_ulong i, j, k;

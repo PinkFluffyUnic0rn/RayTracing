@@ -12,7 +12,7 @@ inline int rt_ray_sphere_intersection( rt_ray *pRay, rt_sphere *pSphere, float *
 	
 	// solving quadratic equation
 	// (t^2)*(d^2) - 2*t*d*(s-c) + (p-c)^2 - r^2 = 0
-	// a == d^2, b == -2*(s-c), c == (p-c)^2 - r^2
+	// a == d^2, b == -2*d*(s-c), c == (p-c)^2 - r^2
 	// where d - ray direction, c - sphere center, 
 	// r - sphere radius, s - ray origin
 	// d is always normalized, so a == 1

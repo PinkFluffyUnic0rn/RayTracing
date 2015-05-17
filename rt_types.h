@@ -149,7 +149,6 @@ typedef struct _rt_compute_sah_help_return
 typedef struct _rt_raytrace_args
 {	
 	rt_box boundingBox;
-	rt_color fillCol;
 	rt_ulong primsCount;
 	rt_ulong trianglesCount;
 	rt_ulong vertexCount;
@@ -191,12 +190,12 @@ typedef struct _rt_kdtree_count_info
 
 typedef struct _rt_kdtree_node
 {
-	float sep;
-	RT_AXIS axis;
 	struct _rt_kdtree_node *leftNode;
 	struct _rt_kdtree_node *rightNode;
 	rt_ulong primsCount;
 	rt_ulong *prims;
+	float sep;
+	RT_AXIS axis;
 	int isLast;
 } rt_kdtree_node;
 
