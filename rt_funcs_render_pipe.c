@@ -517,7 +517,7 @@ void rt_opencl_render( rt_render_pipe *pRp, rt_box *pBoundingBox,
 	// enqueue threads
 	{
 		size_t gwSz[2] = { pRp->w, pRp->h };
-
+		
 		clSetKernelArg( pOcl->raytrace, 0, 
 			sizeof(cl_mem), (void *) &mema );
 		clSetKernelArg( pOcl->raytrace, 1, 

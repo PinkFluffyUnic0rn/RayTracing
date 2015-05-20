@@ -16,7 +16,7 @@
 
 #define SPHERE_COUNT           10
 #define POINT_LIGHTS_COUNT     1
-#define SQUARES_COUNT_SQRT     150
+#define SQUARES_COUNT_SQRT     50
 #define BOTTOM                 1
 
 #define MATERIAL_COUNT         2 + SPHERE_COUNT
@@ -25,8 +25,8 @@
 #define RENDER_TO_SCREEN       1
 #define PNGS_PATH              "pngs/"
 
-#define WIDTH                  1280 //1920
-#define HEIGHT                 768  //1080
+#define WIDTH                  1280 // 1920
+#define HEIGHT                 768  // 1080
 
 typedef struct _wave
 {

@@ -28,7 +28,7 @@ __kernel void raytrace( __constant rt_raytrace_args *a,
 	float yTr = 2.0f/(float)(a->h-1);
 	
 	pRpData.boundingBox = a->boundingBox;
-	pRpData.fillCol.a = 1.0f;
+	pRpData.fillCol.a = 0.0f;
 	pRpData.fillCol.r = 0.0f;
 	pRpData.fillCol.g = 0.0f;
 	pRpData.fillCol.b = 0.0f;

@@ -76,8 +76,10 @@ inline void rt_get_nearest_in_last( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 	ulong *prN, int *nearestB )
 {
 	ulong i;
-	ulong intrsC = 0;
+//	ulong intrsC = 0;
 	ulong sz = pRp->kdtreeNodesBuf[nodeIdx].primsCount;
+
+	*minT = INFINITY;
 	
 	for ( i = 0; i < sz; ++i )
 	{
@@ -92,9 +94,10 @@ inline void rt_get_nearest_in_last( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 
 		if ( b )
 		{
-			++intrsC;
+		//	++intrsC;
 
-			if ( (intrsC == 1) || (t < *minT) )
+		//	if ( (intrsC == 1) || (t < *minT) )
+			if ( t < *minT )
 			{
 				*minT = t;
 				*minU = u;
@@ -154,6 +157,7 @@ inline void rt_get_nearest_triangle( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 	ulong stack[KDTREE_DEPTH];
 	float stackFar[KDTREE_DEPTH];
 	int stackPos = 0;
+	*minT = INFINITY;
 
 	if ( !rt_box_ray_intersection( &(pRp->boundingBox), pR, &tNear, &tFar ) )
 		return;
@@ -379,6 +383,7 @@ inline void rt_get_nearest_prim( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 {
 	ulong i;
 
+	*minT = INFINITY;
 
 	for ( i = 0; i < pRp->primsCount; ++i )
 	{
@@ -398,7 +403,8 @@ inline void rt_get_nearest_prim( rt_cl_render_pipe_data *pRp, rt_ray *pR,
 
 		if ( b )
 		{
-			if ( !(*nearestB) || (t < *minT) )
+		//	if ( !(*nearestB) || (t < *minT) )
+			if ( t < *minT )
 			{
 				*minT = t;
 				*prN = i;
@@ -578,148 +584,140 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp, 
 	rt_ray *pR, int depth )
 {
-	rt_ray rays[NODES_COUNT];
-	rt_color col[NODES_COUNT];
-	rt_vector3 p[NODES_COUNT];
-	rt_vector3 n[NODES_COUNT];
-	ulong pPrMat[NODES_COUNT];
-	int bNearest[NODES_COUNT];
+	stackElement stack[STACK_SIZE];	
+	int stackPos = 0;
+	int curNode = 0;
 	rt_material tmpMat;
-	ulong i;
-	rays[0] = *pR;
+	int state = 1;
 	
-	for ( i = 0; i < NODES_COUNT; ++i )
+	stack[0].parentIdx = -1;
+	stack[0].ray = *pR;
+
+	while ( 1 )
 	{
 		float prMinT, trMinT, trMinU, trMinV;
 		ulong prN, trN;
 		int prNearestB = 0, trNearestB = 0;
-		float nRel, cosI, cosT;
-
-		col[i] =  pRp->fillCol;
+		rt_vector3 p;
+		rt_vector3 n;
 		
-		if ( (i != 0) && (bNearest[(i-1) / 2] == 0) )
+		stack[curNode].col = pRp->fillCol;
+
+		rt_get_nearest_prim( pRp, &(stack[curNode].ray),
+			&prMinT, &prN, &prNearestB );
+		rt_get_nearest_triangle( pRp, &(stack[curNode].ray),
+			&trMinT, &trMinU, &trMinV, &trN, &trNearestB ); 
+
+		if ( trNearestB || prNearestB )
 		{
-			bNearest[i] = 0;
-			continue;
-		}
-		
-		rt_get_nearest_prim( pRp, rays + i, &prMinT, &prN, &prNearestB );
-		rt_get_nearest_triangle( pRp, rays + i, &trMinT, &trMinU, &trMinV,
-			&trN, &trNearestB ); 
-
-		if ( (trNearestB == 0) && (prNearestB == 0) )
-		{
-			bNearest[i] = 0;
-			continue;
-		}
-
-
-		if ( (trNearestB && !prNearestB)
-			 || (trNearestB && prNearestB && trMinT < prMinT) )
-		{
-			rt_triangle tr = pRp->trianglesBuf[trN];
-
-			pPrMat[i] = tr.mat;
-			bNearest[i] = trNearestB;
-
-			rt_get_triangle_point( pRp, rays + i, trNearestB, trN, 
-				trMinT, trMinU, trMinV, p + i, n + i );
-		}
-
-		if ( (!trNearestB && prNearestB)
-			 || (trNearestB && prNearestB && prMinT < trMinT) )
-		{
-			pPrMat[i] = rt_primitive_get_material( pRp, prN );
-			bNearest[i] = prNearestB;
-
-			rt_get_point_from_ray( pRp, rays + i, prNearestB, prN, 
-				prMinT, p + i, n + i );
-		}
-		
-		if ( i >= LIM_NEW_RAYS )
-		{
-			rt_material tmpMat = pRp->materialBuf[pPrMat[i]];
-		
-			rt_light_point( pRp, p + i, n + i, 
-				col + i, &tmpMat, 
-				&(rays[i].src) );
-	
-			continue;
-		}
-
-		//calculate reflected ray
-		rays[2 * i + 1].dest = rt_vector3_reflect( rays[i].dest, n[i] );
-		rays[2 * i + 1].src = p[i] + rays[2 * i + 1].dest * EPSILON;
-		rays[2 * i + 1].invDest = 1.0f / rays[2 * i + 1].dest;
-
-		//calculate refracted ray	
-		nRel = ENV_OPT_DENSITY / pRp->materialBuf[pPrMat[i]].optDens;
-		cosI = -dot( n[i], rays[i].dest );
-		cosT = 1.0f - nRel * nRel * ( 1.0f - cosI * cosI );
-
-		if ( cosT < 0.0f )
-		{
-			bNearest[2 * i + 2] = 0;
-			continue;
-		}
-
-		rays[2 * i + 2].dest = normalize( rays[i].dest * nRel 
-			+ n[i] * (nRel * cosI - sqrt( cosT )) );
-		rays[2 * i + 2].src = p[i] + rays[2 * i + 2].dest * EPSILON;
-		rays[2 * i + 2].invDest = 1.0f / rays[2 * i + 2].dest;
-	}
-
-	if ( !bNearest[0] )
-		return pRp->fillCol;
-
-	for ( i = NODES_COUNT-1; i > 0; --i )
-	{
-		ulong parentIdx = (i - 1) / 2;
-
-		if (bNearest[parentIdx] == 0) 
-			continue;
-
-		if ( i % 2 )
-		{
-			if ( bNearest[parentIdx] == 1 )
+			if ( trMinT < prMinT )
 			{
- 				rt_material tmpMat = pRp->materialBuf[pPrMat[parentIdx]];
-				rt_color primRef = tmpMat.reflect;
+				rt_triangle tr = pRp->trianglesBuf[trN];
 
-				col[parentIdx].r += col[i].r * primRef.r;
-				col[parentIdx].g += col[i].g * primRef.g;
-				col[parentIdx].b += col[i].b * primRef.b;
+				stack[curNode].pPrMat = tr.mat;
+				stack[curNode].bNearest = trNearestB;
 
+				rt_get_triangle_point( pRp,
+					&(stack[curNode].ray), 
+					trNearestB, trN,  trMinT,
+					trMinU, trMinV, &p, &n );
+			}
+			else
+			{
+				stack[curNode].pPrMat = rt_primitive_get_material( pRp, prN );
+				stack[curNode].bNearest = prNearestB;
+
+				rt_get_point_from_ray( pRp,
+					&(stack[curNode].ray),
+					prNearestB, prN, prMinT, &p, &n );
+			}
+
+			stack[curNode].p = p;
+		
+			// calculate light for intersection point
+			tmpMat = pRp->materialBuf[stack[curNode].pPrMat];
+			rt_light_point( pRp, &p, &n,
+				&(stack[curNode].col), &tmpMat,
+				&(stack[curNode].ray.src) );
+	
+			if ( ((stackPos + 1) < STACK_SIZE)
+				&& (stack[curNode].bNearest != -1) )
+			{
+				++stackPos;
+				stack[stackPos].ray.dest = rt_vector3_reflect( stack[curNode].ray.dest, n );
+				stack[stackPos].ray.src = p + stack[stackPos].ray.dest * EPSILON;
+				stack[stackPos].ray.invDest = 1.0f / stack[stackPos].ray.dest;	
+				stack[stackPos].parentIdx = curNode;
+				stack[stackPos].type = 1;
+			}
+
+			if ( ((stackPos + 1) < STACK_SIZE)
+				&& (tmpMat.color.a < 0.99f) )
+			{
+				float nRel, cosI, cosT;
+				
+				nRel = ENV_OPT_DENSITY / pRp->materialBuf[stack[curNode].pPrMat].optDens;
+				cosI = -dot( n, stack[curNode].ray.dest );
+				cosT = 1.0f - nRel * nRel * ( 1.0f - cosI * cosI );
+
+				if ( cosT > 0.0f )
+				{
+					++stackPos;
+					stack[stackPos].ray.dest = normalize( 
+						stack[curNode].ray.dest * nRel 
+						+ n * (nRel * cosI -
+						sqrt( cosT )) );
+					stack[stackPos].ray.src = p +
+						stack[stackPos].ray.dest * EPSILON;
+					stack[stackPos].ray.invDest = 1.0f / stack[stackPos].ray.dest;
+					stack[stackPos].parentIdx = curNode;
+					stack[stackPos].type = 0;
+				}
 			}
 		}
 		else
+			stack[curNode].bNearest = 0;
+
+		if ( curNode == stackPos )
+			break;
+		else
+			++curNode;
+	}
+
+	while ( curNode )
+	{
+		int parent = stack[curNode].parentIdx;
+		rt_material tmpMat = pRp->materialBuf[stack[parent].pPrMat];
+		
+		if ( stack[curNode].type == 1 )
 		{
-			rt_color primCol = pRp->materialBuf[pPrMat[parentIdx]].color;
-			float alpha = pRp->materialBuf[pPrMat[parentIdx]].color.a;
+			stack[parent].col.r
+				+= stack[curNode].col.r * tmpMat.reflect.r;
+			stack[parent].col.g
+				+= stack[curNode].col.g * tmpMat.reflect.g;
+			stack[parent].col.b
+				+= stack[curNode].col.b * tmpMat.reflect.b;
+		}
+		else
+		{
+			float alpha = tmpMat.color.a;
 			float dist;
 			float refr = ( 1.0f - alpha );
- 			rt_material tmpMat = pRp->materialBuf[pPrMat[parentIdx]];
-		
-			rt_light_point( pRp, p + parentIdx, n + parentIdx, 
-				col + parentIdx, &tmpMat, &(rays[parentIdx].src) );
-
-			if ( bNearest[i] )
-			{
-				dist = length( p[parentIdx] - p[i] );
-				refr *= exp( pRp->materialBuf[
-					pPrMat[parentIdx]].lightFalloff
-					* -dist );
-			}
-
-			col[parentIdx].r += col[i].r * refr;
-			col[parentIdx].g += col[i].g * refr;
-			col[parentIdx].b += col[i].b * refr;
+	
+			dist = length( stack[parent].p - stack[curNode].p );
+			refr *= exp( tmpMat.lightFalloff * -dist );
+	
+			stack[parent].col.r += stack[curNode].col.r * refr;
+			stack[parent].col.g += stack[curNode].col.g * refr;
+			stack[parent].col.b += stack[curNode].col.b * refr;
 		}
-				
-		rt_color_clamp( col + parentIdx, col + parentIdx );
+		
+		rt_color_clamp( &(stack[parent].col), &(stack[parent].col) );
+
+		--curNode;
 	}
 	
-	return col[0];
+	return stack[0].col;
 }
 
 #endif
