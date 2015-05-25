@@ -1,20 +1,7 @@
 #ifndef RT_TYPES_CL
 #define RT_TYPES_CL
-/*
-#define RAY_TREE_DEPTH        3
-#define NODES_COUNT           7
-#define LIM_NEW_RAYS          3
-
-#define RAY_TREE_DEPTH        1
-#define NODES_COUNT           1
-#define LIM_NEW_RAYS          0
-*/
 
 #define STACK_SIZE            6
-
-#define RAY_TREE_DEPTH        4
-#define NODES_COUNT           15
-#define LIM_NEW_RAYS          7
 
 #define EPSILON               0.05f              
 
@@ -177,13 +164,13 @@ typedef struct _rt_cl_kdtree_node
 
 typedef struct _stackElement
 {
-	int parentIdx;
-	int bNearest;
 	rt_ray ray;
 	rt_color col;
-	int type;
 	rt_vector3 p;
 	ulong pPrMat;
+	int parentIdx;
+	int bNearest;
+	int type;
 } stackElement;
 
 typedef struct _rt_cl_render_pipe_data

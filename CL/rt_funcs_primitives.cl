@@ -588,7 +588,6 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 	int stackPos = 0;
 	int curNode = 0;
 	rt_material tmpMat;
-	int state = 1;
 	
 	stack[0].parentIdx = -1;
 	stack[0].ray = *pR;
@@ -602,6 +601,7 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 		rt_vector3 n;
 		
 		stack[curNode].col = pRp->fillCol;
+		p.x = p.y = p.z = 0.0f;
 
 		rt_get_nearest_prim( pRp, &(stack[curNode].ray),
 			&prMinT, &prN, &prNearestB );
@@ -641,7 +641,10 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 				&(stack[curNode].ray.src) );
 	
 			if ( ((stackPos + 1) < STACK_SIZE)
-				&& (stack[curNode].bNearest != -1) )
+				&& (stack[curNode].bNearest != -1) 
+				&& ( (tmpMat.reflect.r
+					+ tmpMat.reflect.g 
+					+ tmpMat.reflect.b) > 0.0f ) )
 			{
 				++stackPos;
 				stack[stackPos].ray.dest = rt_vector3_reflect( stack[curNode].ray.dest, n );
@@ -654,19 +657,17 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 			if ( ((stackPos + 1) < STACK_SIZE)
 				&& (tmpMat.color.a < 0.99f) )
 			{
-				float nRel, cosI, cosT;
+				float nRel, cosI, sinT;
 				
 				nRel = ENV_OPT_DENSITY / pRp->materialBuf[stack[curNode].pPrMat].optDens;
-				cosI = -dot( n, stack[curNode].ray.dest );
-				cosT = 1.0f - nRel * nRel * ( 1.0f - cosI * cosI );
+				cosI = dot( n, stack[curNode].ray.dest );
+				sinT = nRel * nRel * ( 1.0f - cosI * cosI );
 
-				if ( cosT > 0.0f )
+				if ( sinT < 1.0f )
 				{
 					++stackPos;
 					stack[stackPos].ray.dest = normalize( 
-						stack[curNode].ray.dest * nRel 
-						+ n * (nRel * cosI -
-						sqrt( cosT )) );
+						stack[curNode].ray.dest * nRel - n * (nRel * cosI + sqrt( 1.0f - sinT )) );
 					stack[stackPos].ray.src = p +
 						stack[stackPos].ray.dest * EPSILON;
 					stack[stackPos].ray.invDest = 1.0f / stack[stackPos].ray.dest;
@@ -702,14 +703,20 @@ inline rt_color rt_raytrace( rt_cl_render_pipe_data *pRp,
 		{
 			float alpha = tmpMat.color.a;
 			float dist;
-			float refr = ( 1.0f - alpha );
-	
+			rt_color refr;
+
 			dist = length( stack[parent].p - stack[curNode].p );
-			refr *= exp( tmpMat.lightFalloff * -dist );
 	
-			stack[parent].col.r += stack[curNode].col.r * refr;
-			stack[parent].col.g += stack[curNode].col.g * refr;
-			stack[parent].col.b += stack[curNode].col.b * refr;
+			refr.r = exp( tmpMat.color.r
+				* tmpMat.lightFalloff * -dist);
+			refr.g = exp( tmpMat.color.g
+				* tmpMat.lightFalloff * -dist);
+			refr.b = exp( tmpMat.color.b
+				* tmpMat.lightFalloff * -dist);
+
+			stack[parent].col.r += stack[curNode].col.r * refr.r;
+			stack[parent].col.g += stack[curNode].col.g * refr.g;
+			stack[parent].col.b += stack[curNode].col.b * refr.b;
 		}
 		
 		rt_color_clamp( &(stack[parent].col), &(stack[parent].col) );

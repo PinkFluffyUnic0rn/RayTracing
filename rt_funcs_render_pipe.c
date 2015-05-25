@@ -261,6 +261,9 @@ void rt_render_pipe_add_primitive( rt_render_pipe *pRp, void *pPrim,
 void rt_render_pipe_add_triangles( rt_render_pipe *pRp, 
 	rt_vertex *pV, rt_triangle *pTr, rt_ulong vCount, rt_ulong tCount )
 {
+	rt_triangle *pTrM;
+	int i;
+
 	if ( (pRp == NULL) || (pV == NULL) || (pTr == NULL) )
 		exit( -1 );
 	
@@ -277,13 +280,26 @@ void rt_render_pipe_add_triangles( rt_render_pipe *pRp,
 			&(pRp->memv) );
 	
 	clEnqueueWriteBuffer( pRp->oclContent.commQue, pRp->memv, 
-		CL_TRUE, sizeof(rt_vertex)*(pRp->vertexCount), 
+		CL_TRUE, sizeof(rt_vertex) * (pRp->vertexCount), 
 		sizeof(rt_vertex) * vCount, pV, 0, NULL, NULL );
 
-	clEnqueueWriteBuffer( pRp->oclContent.commQue, pRp->memt, 
-		CL_TRUE, sizeof(rt_triangle) * pRp->trianglesCount, 
-		sizeof(rt_triangle) * tCount, pTr, 0, NULL, NULL );
 	
+	pTrM = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->memt, CL_TRUE,
+		CL_MAP_WRITE, sizeof(rt_triangle) * (pRp->trianglesCount),
+		sizeof(rt_triangle) * tCount, 0, NULL, NULL, NULL );
+	
+	for ( i = 0; i < tCount; ++i )
+	{
+		pTrM[i].pV0 = pRp->vertexCount + pTr[i].pV0;
+		pTrM[i].pV1 = pRp->vertexCount + pTr[i].pV1;
+		pTrM[i].pV2 = pRp->vertexCount + pTr[i].pV2;
+		pTrM[i].mat = pTr[i].mat;
+
+	}
+
+	clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memt, pTrM, 0, 
+		NULL, NULL );
+
 	pRp->trianglesCount += tCount;
 	pRp->vertexCount += vCount;
 }
@@ -516,7 +532,8 @@ void rt_opencl_render( rt_render_pipe *pRp, rt_box *pBoundingBox,
 	
 	// enqueue threads
 	{
-		size_t gwSz[2] = { pRp->w, pRp->h };
+		size_t gwSz[2] = { pRp->w + ( 32 - (pRp->w % 32) ),
+			pRp->h + ( 32 - (pRp->h % 32) ) };
 		
 		clSetKernelArg( pOcl->raytrace, 0, 
 			sizeof(cl_mem), (void *) &mema );
