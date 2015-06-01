@@ -13,12 +13,13 @@
 #include <fcntl.h>
 
 #include "rt.h"
+#include "rt_debug_output.h"
 #include "rt_meshes.h"
 
 #define SPHERE_COUNT           10
 #define POINT_LIGHTS_COUNT     1
-#define SQUARES_COUNT_SQRT     50
-#define BOTTOM                 0
+#define SQUARES_COUNT_SQRT     150
+#define BOTTOM                 1
 
 #define MATERIAL_COUNT         2 + SPHERE_COUNT
 
@@ -26,8 +27,8 @@
 #define RENDER_TO_SCREEN       1
 #define PNGS_PATH              "pngs/"
 
-#define WIDTH                  1280   // 1920
-#define HEIGHT                 768    // 1080
+#define WIDTH                  1280
+#define HEIGHT                 768
 
 typedef struct _wave
 {
@@ -253,6 +254,12 @@ void keyPress( GtkWidget *w, GdkEvent *e, gpointer usrData )
 
 		break;
 
+	case GDK_KEY_f:
+		rt_dout_matrix4( &(cam->world) );
+		printf( "\n" );
+		break;
+
+
 	case GDK_KEY_equal:
 		dT += 0.0001f;
 		break;
@@ -414,11 +421,238 @@ void buildPlaneOfTriangles()
 	for ( i = 0; i < pointsInRow*pointsInRow; ++i )
 		rt_vector3_normalize( &(water.v[i].norm), 
 			&(water.v[i].norm) );
-
-	water.vc = (SQUARES_COUNT_SQRT+1)*(SQUARES_COUNT_SQRT+1);
-	water.tc = SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2;
 }
 
+void buildSpheres()
+{
+	rt_vector3 v[4];
+	rt_color col[5];
+	int i;
+
+	//create fisrt sphere
+		rt_color_create( col, 0.5f, 0.0f, 0.5f, 1.0f );        //color
+		rt_color_create( col+1, 0.0f, 0.05f, 0.05f, 0.05f );   //ambient
+		rt_color_create( col+2, 0.0f, 0.2f, 0.2f, 0.2f );      //diffuse
+		rt_color_create( col+3, 15.0f, 0.2f, 0.2f, 0.2f );     //specular
+		rt_color_create( col+4, 0.0f, 0.5f, 0.5f, 0.5f );      //reflect
+		rt_material_create( mt+1, col, col+1, col+2, 
+			col+3, col+4, 0.0f, 1.33f );
+	
+		rt_vector3_create( v, 0.0f, 0.0f, 50.0f );
+		rt_sphere_create( sp, v, 10.0f, 1 );
+
+ 		
+	//create other spheres
+	for ( i = 1; i < SPHERE_COUNT; ++i )
+	{
+		rt_color_create( col, 1.0f, 
+			(rt_float)(rand()%16365)/16384.0f, 
+			(rt_float)(rand()%16365)/16384.0f, 
+			(rt_float)(rand()%16365)/16384.0f );
+		rt_color_create( col+1, 0.0f, 0.05f, 0.05f, 0.05f ); //ambient
+		rt_color_create( col+2, 0.0f, 0.5f, 0.5f, 0.5f );    //diffuse
+		rt_color_create( col+3, 15.0f, 0.5f, 0.5f, 0.5f );   //specular
+		rt_color_create( col+4, 0.0f, 0.5f, 0.5f, 0.5f );    //reflect
+		rt_material_create( mt+1+i, col, col+1, col+2, 
+			col+3, col+4, 0.0f, 1.0f );
+			
+		rt_sphere_create( &sp[i], v, 3.66541f, 1+i );
+
+		koef[i] = (rt_float)(rand()%101);
+	}
+}
+
+void buildBottom()
+{
+	rt_ulong vertexOffset = 0;
+	float bottomHeight = 25.0f;
+	float topHeight = 3.0f;
+	rt_color col[5];
+
+	rt_color_create( col, 1.0f, 1.0f, 1.0f, 1.0f );        //color
+	rt_color_create( col+1, 0.0f, 0.05f, 0.05f, 0.05f );   //ambient
+	rt_color_create( col+2, 0.0f, 1.0f, 1.0f, 1.0f );      //diffuse
+	rt_color_create( col+3, 5.0f, 1.0f, 1.0f, 1.0f );      //specular
+	rt_color_create( col+4, 0.0f, 0.0f, 0.0f, 0.0f );      //reflect
+	rt_material_create( mt + SPHERE_COUNT + 1, col, col+1, col+2, 
+		col+3, col+4, 0.0, 1.0f );
+
+	rt_vector3_create( &(bottom.v[vertexOffset].pos),
+		plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 1].pos),
+		plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 2].pos),
+		-plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f ); 
+	rt_vector3_create( &(bottom.v[vertexOffset + 3].pos),
+		-plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
+
+	rt_vector3_create( &(bottom.v[vertexOffset].norm),
+		0.0f, -1.0f, 0.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 1].norm),
+		0.0f, -1.0f, 0.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 2].norm),
+		0.0f, -1.0f, 0.0f ); 
+	rt_vector3_create( &(bottom.v[vertexOffset + 3].norm),
+		0.0f, -1.0f, 0.0f );
+
+	bottom.t[0].pV0 = vertexOffset;
+	bottom.t[0].pV1 = vertexOffset + 1;
+	bottom.t[0].pV2 = vertexOffset + 2;
+
+	bottom.t[1].pV0 = vertexOffset + 3;
+	bottom.t[1].pV1 = vertexOffset + 1;
+	bottom.t[1].pV2 = vertexOffset + 2;
+
+
+	rt_vector3_create( &(bottom.v[vertexOffset + 4].pos),
+		-plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 5].pos),
+		-plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 6].pos),
+		-plSz*0.5f, plHt - topHeight, plSz*0.5f+50.0f ); 
+	rt_vector3_create( &(bottom.v[vertexOffset + 7].pos),
+		-plSz*0.5f, plHt - topHeight, -plSz*0.5f+50.0f );
+
+	rt_vector3_create( &(bottom.v[vertexOffset + 4].norm),
+		1.0f, 0.0f, 0.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 5].norm),
+		1.0f, 0.0f, 0.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 6].norm),
+		1.0f, 0.0f, 0.0f ); 
+	rt_vector3_create( &(bottom.v[vertexOffset + 7].norm),
+		1.0f, 0.0f, 0.0f );
+
+	bottom.t[2].pV0 = vertexOffset + 4;
+	bottom.t[2].pV1 = vertexOffset + 5;
+	bottom.t[2].pV2 = vertexOffset + 6;
+
+	bottom.t[3].pV0 = vertexOffset + 7;
+	bottom.t[3].pV1 = vertexOffset + 6;
+	bottom.t[3].pV2 = vertexOffset + 5;
+
+
+	rt_vector3_create( &(bottom.v[vertexOffset + 8].pos),
+		plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 9].pos),
+		plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 10].pos),
+		plSz*0.5f, plHt - topHeight, plSz*0.5f+50.0f ); 
+	rt_vector3_create( &(bottom.v[vertexOffset + 11].pos),
+		plSz*0.5f, plHt - topHeight, -plSz*0.5f+50.0f );
+
+	rt_vector3_create( &(bottom.v[vertexOffset + 8].norm),
+		-1.0f, 0.0f, 0.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 9].norm),
+		-1.0f, 0.0f, 0.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 10].norm),
+		-1.0f, 0.0f, 0.0f ); 
+	rt_vector3_create( &(bottom.v[vertexOffset + 11].norm),
+		-1.0f, 0.0f, 0.0f );
+
+	bottom.t[4].pV0 = vertexOffset + 8;
+	bottom.t[4].pV1 = vertexOffset + 9;
+	bottom.t[4].pV2 = vertexOffset + 10;
+
+	bottom.t[5].pV0 = vertexOffset + 11;
+	bottom.t[5].pV1 = vertexOffset + 10;
+	bottom.t[5].pV2 = vertexOffset + 9;
+
+	rt_vector3_create( &(bottom.v[vertexOffset + 12].pos),
+		-plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 13].pos),
+		plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 14].pos),
+		-plSz*0.5f, plHt - topHeight, plSz*0.5f+50.0f ); 
+	rt_vector3_create( &(bottom.v[vertexOffset + 15].pos),
+		plSz*0.5f, plHt - topHeight, plSz*0.5f+50.0f );
+
+	rt_vector3_create( &(bottom.v[vertexOffset + 12].norm),
+		0.0f, 0.0f, -1.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 13].norm),
+		0.0f, 0.0f, -1.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 14].norm),
+		0.0f, 0.0f, -1.0f ); 
+	rt_vector3_create( &(bottom.v[vertexOffset + 15].norm),
+		0.0f, 0.0f, -1.0f );
+
+	bottom.t[6].pV0 = vertexOffset + 12;
+	bottom.t[6].pV1 = vertexOffset + 13;
+	bottom.t[6].pV2 = vertexOffset + 14;
+
+	bottom.t[7].pV0 = vertexOffset + 15;
+	bottom.t[7].pV1 = vertexOffset + 14;
+	bottom.t[7].pV2 = vertexOffset + 13;
+
+	rt_vector3_create( &(bottom.v[vertexOffset + 16].pos),
+		-plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 17].pos),
+		plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 18].pos),
+		-plSz*0.5f, plHt - topHeight, -plSz*0.5f+50.0f ); 
+	rt_vector3_create( &(bottom.v[vertexOffset + 19].pos),
+		plSz*0.5f, plHt - topHeight, -plSz*0.5f+50.0f );
+
+	rt_vector3_create( &(bottom.v[vertexOffset + 16].norm),
+		0.0f, 0.0f, 1.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 17].norm),
+		0.0f, 0.0f, 1.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 18].norm),
+		0.0f, 0.0f, 1.0f ); 
+	rt_vector3_create( &(bottom.v[vertexOffset + 19].norm),
+		0.0f, 0.0f, 1.0f );
+
+	bottom.t[8].pV0 = vertexOffset + 16;
+	bottom.t[8].pV1 = vertexOffset + 17;
+	bottom.t[8].pV2 = vertexOffset + 18;
+
+	bottom.t[9].pV0 = vertexOffset + 19;
+	bottom.t[9].pV1 = vertexOffset + 18;
+	bottom.t[9].pV2 = vertexOffset + 17;
+}
+
+/*
+void buildBottom()
+{
+	rt_ulong vertexOffset = 0;
+	rt_color col[5];
+	float bottomHeight = -5.5f;
+	float bottomSize = 100.0f;
+
+	rt_color_create( col, 1.0f, 0.223f, 0.345f, 0.474f );   //color
+	rt_color_create( col+1, 0.0f, 0.0f, 0.0f, 0.0f );   //ambient
+	rt_color_create( col+2, 0.0f, 0.64f, 0.64f, 0.64f );      //diffuse
+	rt_color_create( col+3, 96.0f, 0.5f, 0.5f, 0.5f );      //specular
+	rt_color_create( col+4, 0.0f, 1.0f, 1.0f, 1.0f );      //reflect
+	rt_material_create( mt, col, col+1, col+2, 
+		col+3, col+4, 0.0, 1.0f );
+
+	rt_vector3_create( &(bottom.v[vertexOffset].pos),
+		bottomSize*0.5f, bottomHeight, bottomSize*0.5f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 1].pos),
+		bottomSize*0.5f, bottomHeight, -bottomSize*0.5f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 2].pos),
+		-bottomSize*0.5f, bottomHeight, bottomSize*0.5f ); 
+	rt_vector3_create( &(bottom.v[vertexOffset + 3].pos),
+		-bottomSize*0.5f, bottomHeight, -bottomSize*0.5f );
+
+	rt_vector3_create( &(bottom.v[vertexOffset].norm),
+		0.0f, 1.0f, 0.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 1].norm),
+		0.0f, 1.0f, 0.0f );
+	rt_vector3_create( &(bottom.v[vertexOffset + 2].norm),
+		0.0f, 1.0f, 0.0f ); 
+	rt_vector3_create( &(bottom.v[vertexOffset + 3].norm),
+		0.0f, 1.0f, 0.0f );
+
+	bottom.t[0].pV0 = vertexOffset;
+	bottom.t[0].pV1 = vertexOffset + 1;
+	bottom.t[0].pV2 = vertexOffset + 2;
+
+	bottom.t[1].pV0 = vertexOffset + 3;
+	bottom.t[1].pV1 = vertexOffset + 1;
+	bottom.t[1].pV2 = vertexOffset + 2;
+}
+*/
 void draw( GtkWidget *wgt, cairo_t *cr, gpointer ud )
 {
 	struct timespec curTime;
@@ -443,10 +677,8 @@ void draw( GtkWidget *wgt, cairo_t *cr, gpointer ud )
 
 	//add light to render pipe
 	for ( i = 0; i < POINT_LIGHTS_COUNT; ++i )
-	{
 		rt_render_pipe_add_light( &renderPipe, (void *)(lt+i),
 			RT_LT_POINT );
-	}
 
 	//add primitives to render pipe
 	if ( SPHERE_COUNT > 0 )
@@ -476,9 +708,15 @@ void draw( GtkWidget *wgt, cairo_t *cr, gpointer ud )
 	}
 
 	//add meshes
-	 rt_mesh_add( &renderPipe, &bottom );
-	 rt_mesh_add( &renderPipe, &water );
-	// rt_mesh_add( &renderPipe, &fluttershy );
+	rt_mesh_add( &renderPipe, &bottom, SPHERE_COUNT + 1 );
+
+//	rt_render_pipe_add_material( &renderPipe, mt, 300 );
+//	rt_mesh_add( &renderPipe, &bottom, 300 );
+
+	rt_mesh_add( &renderPipe, &water, 0 );
+
+//	for ( i = 0; i < fluttershy.gc; ++i )
+//		rt_mesh_add_group( &renderPipe, &fluttershy, i, i );
 
 	//draw to buffer
 	renderedImage = rt_render_pipe_draw( &renderPipe );
@@ -537,10 +775,10 @@ int main( int argc, char *argv[] )
 	rt_init( *argv );
 
 	//initiliaze render pipe
-	rt_camera_create( &frust, (float)w / (float)h, 0.125*M_PI );
-
 	rt_render_pipe_create( &renderPipe, w, h );
 
+	rt_camera_create( &frust, (float)w / (float)h, 0.125*M_PI );
+	
 	rt_render_pipe_set_camera( &renderPipe, &frust );
 
 	//create dir for writing images, if it doesn't exists
@@ -560,253 +798,60 @@ int main( int argc, char *argv[] )
 			
 			t += dT;
 		}
-
 	}
 
 	//initialize render pipe and create objects to draw
-	
-	if ( rt_mesh_load_from_obj( &fluttershy, "flutter.obj" ) == -1 )
+	if ( rt_mesh_load_from_obj( &fluttershy, "flutter.obj" ) < 0 )
 		printf( "obj load error\n" );
-	
-	//create fisrt sphere
-	if ( SPHERE_COUNT > 0 )
-	{
-		rt_color_create( col, 0.5f, 0.0f, 0.5f, 1.0f );        //color
-		rt_color_create( col+1, 0.0f, 0.05f, 0.05f, 0.05f );   //ambient
-		rt_color_create( col+2, 0.0f, 0.2f, 0.2f, 0.2f );      //diffuse
-		rt_color_create( col+3, 15.0f, 0.2f, 0.2f, 0.2f );     //specular
-		rt_color_create( col+4, 0.0f, 0.5f, 0.5f, 0.5f );      //reflect
-		rt_material_create( mt+1, col, col+1, col+2, 
-			col+3, col+4, 0.0f, 1.33f );
-	
-		rt_vector3_create( v, 0.0f, 0.0f, 50.0f );
-		rt_sphere_create( sp, v, 10.0f, 1 );
-	}
- 		
-	//create other spheres
-	for ( i = 1; i < SPHERE_COUNT; ++i )
-	{
-		rt_color_create( col, 1.0f, 
-			(rt_float)(rand()%16365)/16384.0f, 
-			(rt_float)(rand()%16365)/16384.0f, 
-			(rt_float)(rand()%16365)/16384.0f );
-		rt_color_create( col+1, 0.0f, 0.05f, 0.05f, 0.05f ); //ambient
-		rt_color_create( col+2, 0.0f, 0.5f, 0.5f, 0.5f );    //diffuse
-		rt_color_create( col+3, 15.0f, 0.5f, 0.5f, 0.5f );   //specular
-		rt_color_create( col+4, 0.0f, 0.5f, 0.5f, 0.5f );    //reflect
-		rt_material_create( mt+1+i, col, col+1, col+2, 
-			col+3, col+4, 0.0f, 1.0f );
-			
-		rt_sphere_create( &sp[i], v, 3.66541f, 1+i );
-
-		koef[i] = (rt_float)(rand()%101);
-	}
-
-	//create point light
-	rt_color_create( col, 1.0f, 1.0f, 1.0f, 1.0f );
-	rt_vector3_create( v, 50.0f, -15.0f, 0.0f );
-
-	for ( i = 0; i < POINT_LIGHTS_COUNT; ++i )
-		rt_point_light_create( lt+i, v, 100.0f, col );
+	else
+		printf( "model loaded: %lu verticies, %lu triangles\n",
+			fluttershy.vc, fluttershy.tc );
 
 	{
 		rt_camera *cam = NULL;
 		rt_render_pipe_get_camera( &renderPipe, &cam );
 
 		//set camera position
-		cam->world._11 = 1.0f;          
-		cam->world._12 = 0.0f;          
-		cam->world._13 = 0.0f;          
-		cam->world._14 = 0.0f;          
+		cam->world._11 = 1.0f;           cam->world._12 = 0.0f;          
+		cam->world._13 = 0.0f;           cam->world._14 = 0.0f;          
 		                                   
-		cam->world._21 = 0.0f;          
-		cam->world._22 = 0.968582f;     
-		cam->world._23 = -0.248690f;    
-		cam->world._24 = 0.0f;          
+		cam->world._21 = 0.0f;           cam->world._22 = 0.968582f;     
+		cam->world._23 = -0.248690f;     cam->world._24 = 0.0f;          
                                                    
-		cam->world._31 = 0.0f;          
-		cam->world._32 = 0.248690f;     
-		cam->world._33 = 0.968582f;     
-		cam->world._34 = 0.0f;          
+		cam->world._31 = 0.0f;           cam->world._32 = 0.248690f;     
+		cam->world._33 = 0.968582f;      cam->world._34 = 0.0f;          
 				                            
-		cam->world._41 = 0.0f;          
-		cam->world._42 = -12.0f;        
-		cam->world._43 = -43.0f;        
-		cam->world._44 = 1.0f;          
+		cam->world._41 = 0.0f;           cam->world._42 = -12.0f;        
+		cam->world._43 = -43.0f;         cam->world._44 = 1.0f;          
                                                    
-		camPos.x = 0.0f;           
-		camPos.y = 12.0f;          
-		camPos.z = 43.0f; 
-	
-/*
-		cam->world._42 = 2.0f;        
-		cam->world._43 = 10;        
-		cam->world._22 = -1.0;     
-		cam->world._33 = -1.0;     
-*/
+		camPos.x = 0.0f; camPos.y = 12.0f; camPos.z = 43.0f; 
+
 		rt_render_pipe_free_camera( &renderPipe, cam );
 	}
 
-	{
-		rt_ulong vertexOffset = 0;
-		float bottomHeight = 25.0f;
-		float topHeight = 3.0f;
+	//create point light
+	rt_color_create( col, 1.0f, 1.0f, 1.0f, 1.0f );
+	rt_vector3_create( v, -20.0f, -35.0f, 0.0f );
+
+	for ( i = 0; i < POINT_LIGHTS_COUNT; ++i )
+		rt_point_light_create( lt+i, v, 100.0f, col );
 	
-		rt_color_create( col, 1.0f, 1.0f, 1.0f, 1.0f );        //color
-		rt_color_create( col+1, 0.0f, 0.05f, 0.05f, 0.05f );   //ambient
-		rt_color_create( col+2, 0.0f, 1.0f, 1.0f, 1.0f );      //diffuse
-		rt_color_create( col+3, 5.0f, 1.0f, 1.0f, 1.0f );      //specular
-		rt_color_create( col+4, 0.0f, 0.0f, 0.0f, 0.0f );      //reflect
-		rt_material_create( mt + SPHERE_COUNT + 1, col, col+1, col+2, 
-			col+3, col+4, 0.0, 1.0f );
+	// alloc memory for meshes
+	rt_mesh_reserve( &water, (SQUARES_COUNT_SQRT+1)*(SQUARES_COUNT_SQRT+1),
+		SQUARES_COUNT_SQRT*SQUARES_COUNT_SQRT*2, 1 );
+
+//	rt_mesh_reserve( &bottom, 4, 2, 1 );
+//	buildBottom();
 	
-		rt_vector3_create( &(bottom.v[vertexOffset].pos),
-			plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 1].pos),
-			plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 2].pos),
-			-plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f ); 
-		rt_vector3_create( &(bottom.v[vertexOffset + 3].pos),
-			-plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
-
-		rt_vector3_create( &(bottom.v[vertexOffset].norm),
-			0.0f, -1.0f, 0.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 1].norm),
-			0.0f, -1.0f, 0.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 2].norm),
-			0.0f, -1.0f, 0.0f ); 
-		rt_vector3_create( &(bottom.v[vertexOffset + 3].norm),
-			0.0f, -1.0f, 0.0f );
-
-		bottom.t[0].pV0 = vertexOffset;
-		bottom.t[0].pV1 = vertexOffset + 1;
-		bottom.t[0].pV2 = vertexOffset + 2;
-		bottom.t[0].mat = SPHERE_COUNT + 1;
-
-		bottom.t[1].pV0 = vertexOffset + 3;
-		bottom.t[1].pV1 = vertexOffset + 1;
-		bottom.t[1].pV2 = vertexOffset + 2;
-		bottom.t[1].mat = SPHERE_COUNT + 1;
-
-
-		rt_vector3_create( &(bottom.v[vertexOffset + 4].pos),
-			-plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 5].pos),
-			-plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 6].pos),
-			-plSz*0.5f, plHt - topHeight, plSz*0.5f+50.0f ); 
-		rt_vector3_create( &(bottom.v[vertexOffset + 7].pos),
-			-plSz*0.5f, plHt - topHeight, -plSz*0.5f+50.0f );
-
-		rt_vector3_create( &(bottom.v[vertexOffset + 4].norm),
-			1.0f, 0.0f, 0.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 5].norm),
-			1.0f, 0.0f, 0.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 6].norm),
-			1.0f, 0.0f, 0.0f ); 
-		rt_vector3_create( &(bottom.v[vertexOffset + 7].norm),
-			1.0f, 0.0f, 0.0f );
-
-		bottom.t[2].pV0 = vertexOffset + 4;
-		bottom.t[2].pV1 = vertexOffset + 5;
-		bottom.t[2].pV2 = vertexOffset + 6;
-		bottom.t[2].mat = SPHERE_COUNT + 1;
-
-		bottom.t[3].pV0 = vertexOffset + 7;
-		bottom.t[3].pV1 = vertexOffset + 6;
-		bottom.t[3].pV2 = vertexOffset + 5;
-		bottom.t[3].mat = SPHERE_COUNT + 1;
-
-
-		rt_vector3_create( &(bottom.v[vertexOffset + 8].pos),
-			plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 9].pos),
-			plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 10].pos),
-			plSz*0.5f, plHt - topHeight, plSz*0.5f+50.0f ); 
-		rt_vector3_create( &(bottom.v[vertexOffset + 11].pos),
-			plSz*0.5f, plHt - topHeight, -plSz*0.5f+50.0f );
-
-		rt_vector3_create( &(bottom.v[vertexOffset + 8].norm),
-			-1.0f, 0.0f, 0.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 9].norm),
-			-1.0f, 0.0f, 0.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 10].norm),
-			-1.0f, 0.0f, 0.0f ); 
-		rt_vector3_create( &(bottom.v[vertexOffset + 11].norm),
-			-1.0f, 0.0f, 0.0f );
-
-		bottom.t[4].pV0 = vertexOffset + 8;
-		bottom.t[4].pV1 = vertexOffset + 9;
-		bottom.t[4].pV2 = vertexOffset + 10;
-		bottom.t[4].mat = SPHERE_COUNT + 1;
-
-		bottom.t[5].pV0 = vertexOffset + 11;
-		bottom.t[5].pV1 = vertexOffset + 10;
-		bottom.t[5].pV2 = vertexOffset + 9;
-		bottom.t[5].mat = SPHERE_COUNT + 1;
-
-
-		rt_vector3_create( &(bottom.v[vertexOffset + 12].pos),
-			-plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 13].pos),
-			plSz*0.5f, plHt - topHeight + bottomHeight, plSz*0.5f+50.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 14].pos),
-			-plSz*0.5f, plHt - topHeight, plSz*0.5f+50.0f ); 
-		rt_vector3_create( &(bottom.v[vertexOffset + 15].pos),
-			plSz*0.5f, plHt - topHeight, plSz*0.5f+50.0f );
-
-		rt_vector3_create( &(bottom.v[vertexOffset + 12].norm),
-			0.0f, 0.0f, -1.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 13].norm),
-			0.0f, 0.0f, -1.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 14].norm),
-			0.0f, 0.0f, -1.0f ); 
-		rt_vector3_create( &(bottom.v[vertexOffset + 15].norm),
-			0.0f, 0.0f, -1.0f );
-
-		bottom.t[6].pV0 = vertexOffset + 12;
-		bottom.t[6].pV1 = vertexOffset + 13;
-		bottom.t[6].pV2 = vertexOffset + 14;
-		bottom.t[6].mat = SPHERE_COUNT + 1;
-
-		bottom.t[7].pV0 = vertexOffset + 15;
-		bottom.t[7].pV1 = vertexOffset + 14;
-		bottom.t[7].pV2 = vertexOffset + 13;
-		bottom.t[7].mat = SPHERE_COUNT + 1;
-
-
-		rt_vector3_create( &(bottom.v[vertexOffset + 16].pos),
-			-plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 17].pos),
-			plSz*0.5f, plHt - topHeight + bottomHeight, -plSz*0.5f+50.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 18].pos),
-			-plSz*0.5f, plHt - topHeight, -plSz*0.5f+50.0f ); 
-		rt_vector3_create( &(bottom.v[vertexOffset + 19].pos),
-			plSz*0.5f, plHt - topHeight, -plSz*0.5f+50.0f );
-
-		rt_vector3_create( &(bottom.v[vertexOffset + 16].norm),
-			0.0f, 0.0f, 1.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 17].norm),
-			0.0f, 0.0f, 1.0f );
-		rt_vector3_create( &(bottom.v[vertexOffset + 18].norm),
-			0.0f, 0.0f, 1.0f ); 
-		rt_vector3_create( &(bottom.v[vertexOffset + 19].norm),
-			0.0f, 0.0f, 1.0f );
-
-		bottom.t[8].pV0 = vertexOffset + 16;
-		bottom.t[8].pV1 = vertexOffset + 17;
-		bottom.t[8].pV2 = vertexOffset + 18;
-		bottom.t[8].mat = SPHERE_COUNT + 1;
-
-		bottom.t[9].pV0 = vertexOffset + 19;
-		bottom.t[9].pV1 = vertexOffset + 18;
-		bottom.t[9].pV2 = vertexOffset + 17;
-		bottom.t[9].mat = SPHERE_COUNT + 1;
-
-		bottom.vc = 20;
-		bottom.tc = 10;
-	}
+	rt_mesh_reserve( &bottom, 20, 10, 1 );
+	
+	// make spheres
+	if ( SPHERE_COUNT )
+		buildSpheres();
+	
+	// make bottom
+	if ( BOTTOM )
+		buildBottom();
 
 	//set timeout for render
 	rotTID = g_timeout_add( (guint)1, rotStep, NULL );
@@ -827,8 +872,13 @@ int main( int argc, char *argv[] )
 	g_signal_connect( mainWindow, "destroy", G_CALLBACK(gtk_main_quit), 
 		NULL );
 	g_signal_connect( G_OBJECT(drawArea), "draw", G_CALLBACK(draw), NULL );
-	g_signal_connect( G_OBJECT(drawArea), "size_allocate", 
-		G_CALLBACK(resizeImage), NULL );
+
+	if ( RENDER_TO_SCREEN )
+	{
+		g_signal_connect( G_OBJECT(drawArea), "size_allocate", 
+			G_CALLBACK(resizeImage), NULL );
+	}
+
 	g_signal_connect( mainWindow, "key-press-event", 
 		G_CALLBACK(keyPress), NULL );
 	g_signal_connect( mainWindow, "destroy",
@@ -846,6 +896,9 @@ int main( int argc, char *argv[] )
 		(initialTime % 60) );
 
 	rt_render_pipe_cleanup( &renderPipe );
+	rt_mesh_release( &water );
+	rt_mesh_release( &bottom );
+	rt_mesh_release( &fluttershy );
 
 	return 0;
 }

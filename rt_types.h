@@ -14,7 +14,7 @@
 #define SAH_PARTS                 32
 #define COMPUTE_SAH_THREADS       8
 #define MAX_PRIMS_IN_NODE         7
-#define MAX_DEPTH                 6
+#define MAX_DEPTH                 10 // 6
 
 typedef enum _RT_PRIMITIVE_TYPE
 {

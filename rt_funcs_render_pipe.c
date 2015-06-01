@@ -259,7 +259,8 @@ void rt_render_pipe_add_primitive( rt_render_pipe *pRp, void *pPrim,
 }
 
 void rt_render_pipe_add_triangles( rt_render_pipe *pRp, 
-	rt_vertex *pV, rt_triangle *pTr, rt_ulong vCount, rt_ulong tCount )
+	rt_vertex *pV, rt_triangle *pTr, rt_ulong vOffset, rt_ulong tOffset,
+	rt_ulong vCount, rt_ulong tCount, rt_ulong primGroup )
 {
 	rt_triangle *pTrM;
 	int i;
@@ -281,7 +282,7 @@ void rt_render_pipe_add_triangles( rt_render_pipe *pRp,
 	
 	clEnqueueWriteBuffer( pRp->oclContent.commQue, pRp->memv, 
 		CL_TRUE, sizeof(rt_vertex) * (pRp->vertexCount), 
-		sizeof(rt_vertex) * vCount, pV, 0, NULL, NULL );
+		sizeof(rt_vertex) * vCount, pV + vOffset, 0, NULL, NULL );
 
 	
 	pTrM = clEnqueueMapBuffer( pRp->oclContent.commQue, pRp->memt, CL_TRUE,
@@ -290,11 +291,10 @@ void rt_render_pipe_add_triangles( rt_render_pipe *pRp,
 	
 	for ( i = 0; i < tCount; ++i )
 	{
-		pTrM[i].pV0 = pRp->vertexCount + pTr[i].pV0;
-		pTrM[i].pV1 = pRp->vertexCount + pTr[i].pV1;
-		pTrM[i].pV2 = pRp->vertexCount + pTr[i].pV2;
-		pTrM[i].mat = pTr[i].mat;
-
+		pTrM[i].pV0 = pRp->vertexCount + pTr[i + tOffset].pV0 - vOffset;
+		pTrM[i].pV1 = pRp->vertexCount + pTr[i + tOffset].pV1 - vOffset;
+		pTrM[i].pV2 = pRp->vertexCount + pTr[i + tOffset].pV2 - vOffset;
+		pTrM[i].mat = primGroup;
 	}
 
 	clEnqueueUnmapMemObject( pRp->oclContent.commQue, pRp->memt, pTrM, 0, 
@@ -863,8 +863,7 @@ rt_kdtree_count_info rt_kdtree_pack_to_buffer( rt_cl_kdtree_node *pNodeBuf,
 {
 	rt_kdtree_count_info leftChilds, rightChilds;
 
-	if ( (pNodeBuf == NULL) || (pPrimsIdxBuf == NULL) 
-		|| (pNode == NULL) )
+	if ( (pNodeBuf == NULL) || (pNode == NULL) )
 		exit( -1 );
 
 	pNodeBuf[writePos].isLast = pNode->isLast;
@@ -1100,9 +1099,10 @@ void rt_kdtree_build( rt_render_pipe *pRp, rt_box *pBoundingBox,
 	rt_ulong nodesCount;
 	rt_kdtree_node *rootNode = malloc( sizeof(rt_kdtree_node) );
 
-	if ( pRp == NULL )
+	if ( (pRp == NULL) || (pBoundingBox == NULL)
+			|| (memi == NULL) || (memn == NULL) )
 		exit( -1 );
-
+	
 	clEnqueueReadBuffer( pRp->oclContent.commQue, pRp->memt, CL_TRUE, 0, 
 		sizeof(rt_vertex) * pRp->trianglesCount, memTr, 
 		0, NULL, NULL );
@@ -1112,6 +1112,7 @@ void rt_kdtree_build( rt_render_pipe *pRp, rt_box *pBoundingBox,
 		0, NULL, NULL );
 
 	// making bounding box
+	minP.x = minP.y = minP.z = maxP.x = maxP.y = maxP.z = 0.0f;
 	for ( i = 0; i < pRp->vertexCount; ++i )
 	{
 		minP.x = (minP.x > memVer[i].pos.x || i == 0) ? memVer[i].pos.x : minP.x;
@@ -1192,7 +1193,7 @@ void rt_kdtree_build( rt_render_pipe *pRp, rt_box *pBoundingBox,
 		rt_dout_kdtree( memVer, memTr, pRp, rootNode, 0 );
 		exit(1);
 		*/
-		
+	
 		rt_kdtree_pack_to_buffer( memNode, 
 			memTrIdx, rootNode, 0, 0 );
 /*	

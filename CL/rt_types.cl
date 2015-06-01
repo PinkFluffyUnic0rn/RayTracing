@@ -12,7 +12,7 @@
 #define DIFFUSE_ENABLED       1
 #define SPECULAR_ENABLED      1
 
-#define KDTREE_DEPTH          6
+#define KDTREE_DEPTH          10 // 6
 
 typedef enum _RT_PRIMITIVE_TYPE
 {

@@ -38,7 +38,8 @@ void rt_render_pipe_add_primitive( rt_render_pipe *pRp, void *pPrim,
 	RT_PRIMITIVE_TYPE pt );
 
 void rt_render_pipe_add_triangles( rt_render_pipe *pRp, rt_vertex *pV, 
-	rt_triangle *pTr, rt_ulong vCount, rt_ulong tCount );
+	rt_triangle *pTr, rt_ulong vOffset, rt_ulong tOffset, 
+	rt_ulong vCount, rt_ulong tCount, rt_ulong tGroup );
 
 void rt_render_pipe_add_material( rt_render_pipe *pRp, rt_material *mat, 
 	unsigned long int ind ); 
